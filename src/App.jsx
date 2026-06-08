@@ -176,7 +176,7 @@ export default function App() {
             </a>
 
             <p><strong>Practice:</strong> 072 763 6282</p>
-            <p><strong>WhatsApp:</strong> 068 104 2455</p>
+            <p><strong>WhatsApp:</strong> 0814882066</p>
             <p><strong>Email:</strong></p>
             <p>reception.hendors@gmail.com</p>
             <p><strong>Hours:</strong></p>
