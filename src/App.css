@@ -1,476 +1,469 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+import React, { useState } from "react";
+import "./App.css";
+
+// ── Supabase config ──────────────────────────────────────────────────────────
+const SUPABASE_URL = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE";
+const SUPABASE_ANON_KEY = ""; // ← paste your eyJ... key here
+
+async function sbFetch(path, opts = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Prefer: "return=representation",
+      ...opts.headers,
+    },
+    ...opts,
+  });
+  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
 }
 
-body {
-  background: #030712;
-  color: white;
-  font-family: Arial, Helvetica, sans-serif;
+// ── Staff credentials (simple — upgrade to Supabase Auth later) ──────────────
+const STAFF = {
+  hendor: { password: "hd2025admin", role: "admin", name: "Dr Hendor" },
+  reception: { password: "hd2025desk", role: "reception", name: "Reception" },
+};
+
+// ── Colour palette ───────────────────────────────────────────────────────────
+// Deep navy #0a1628, steel blue #1e3a5f, accent #2d9cdb, white, light grey #f4f7fb
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState("patients");
+
+  if (!user) return <Login onLogin={setUser} />;
+  return (
+    <Shell user={user} onLogout={() => setUser(null)} page={page} setPage={setPage}>
+      {page === "patients" && <Patients />}
+      {page === "bookings" && <Bookings />}
+      {page === "billing" && <Billing />}
+      {page === "reports" && <Reports user={user} />}
+      {page === "intake" && <Intake />}
+    </Shell>
+  );
 }
 
-.site {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(0,255,255,0.15), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(0,120,255,0.15), transparent 30%),
-    #030712;
-}
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
 
-.nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 60px;
-  border-bottom: 1px solid rgba(0,255,255,0.1);
-  position: sticky;
-  top: 0;
-  backdrop-filter: blur(10px);
-  background: rgba(3, 7, 18, 0.85);
-  z-index: 100;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.logo {
-  width: 50px;
-  height: 50px;
-  border-radius: 18px;
-  background: linear-gradient(to bottom right, cyan, royalblue);
-  color: black;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: 900;
-  box-shadow: 0 0 25px rgba(0,255,255,0.5);
-}
-
-.brand h2 {
-  font-size: 32px;
-}
-
-.brand p {
-  color: #8adfff;
-  margin-top: 5px;
-}
-
-.links {
-  display: flex;
-  align-items: center;
-  gap: 25px;
-}
-
-.links a {
-  color: white;
-  text-decoration: none;
-}
-
-.links button,
-.actions button,
-.v16 button,
-.form button {
-  border: none;
-  background: cyan;
-  color: black;
-  padding: 12px 22px;
-  border-radius: 14px;
-  font-weight: bold;
-  cursor: pointer;
-  box-shadow: 0 0 20px rgba(0,255,255,0.35);
-}
-
-.ghost {
-  background: transparent !important;
-  border: 1px solid rgba(0,255,255,0.3) !important;
-  color: white !important;
-}
-
-.menuBtn {
-  display: none;
-}
-
-.hero {
-  background-image: linear-gradient(rgba(3,7,18,0.75), rgba(3,7,18,0.9)), url('/images/20250516_151555.jpg');
-background-size: 100% auto;
-background-position: center top;
-background-repeat: no-repeat;
-background-position: center;
-border-bottom: 1px solid rgba(0,255,255,0.1);
-  display: grid;
-  grid-template-columns: 1fr 420px;
-  gap: 50px;
-  padding: 100px 60px;
-  align-items: center;
-}
-
-.badge {
-  display: inline-block;
-  padding: 10px 18px;
-  border-radius: 999px;
-  background: rgba(0,255,255,0.08);
-  border: 1px solid rgba(0,255,255,0.2);
-  color: #8adfff;
-  margin-bottom: 25px;
-}
-
-.hero h1 {
-  font-size: 74px;
-  line-height: 1;
-  margin-bottom: 30px;
-}
-
-.hero p {
-  font-size: 22px;
-  line-height: 1.7;
-  color: #c8d6e5;
-}
-
-.actions {
-  margin-top: 35px;
-  display: flex;
-  gap: 20px;
-}
-
-.panel {
-  padding: 35px;
-  border-radius: 32px;
-  background: rgba(15,23,42,0.7);
-  border: 1px solid rgba(0,255,255,0.12);
-  box-shadow: 0 0 40px rgba(0,255,255,0.08);
-}
-
-.small {
-  color: #8adfff;
-}
-
-.panel h2 {
-  margin: 15px 0 20px;
-  font-size: 38px;
-}
-
-.miniGrid {
-  display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: 15px;
-  margin-top: 30px;
-}
-
-.miniGrid div {
-  background: rgba(255,255,255,0.05);
-  border-radius: 20px;
-  padding: 20px;
-  text-align: center;
-}
-
-.section {
-  padding: 90px 60px;
-}
-
-.section h2 {
-  font-size: 52px;
-  margin-bottom: 20px;
-}
-
-.section p {
-  color: #c8d6e5;
-  line-height: 1.8;
-}
-
-.cards {
-  margin-top: 50px;
-  display: grid;
-  grid-template-columns: repeat(3,1fr);
-  gap: 25px;
-}
-
-.card {
-  background: rgba(15,23,42,0.75);
-  border: 1px solid rgba(0,255,255,0.1);
-  border-radius: 28px;
-  padding: 30px;
-  box-shadow: 0 0 30px rgba(0,255,255,0.05);
-}
-
-.card h3 {
-  margin: 20px 0;
-  font-size: 28px;
-}
-
-.icon {
-  width: 55px;
-  height: 55px;
-  border-radius: 18px;
-  background: rgba(0,255,255,0.1);
-  color: cyan;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-}
-
-.split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-}
-
-.big ul {
-  margin-top: 25px;
-  padding-left: 20px;
-}
-
-.big li {
-  margin-bottom: 18px;
-  color: #c8d6e5;
-  line-height: 1.6;
-}
-
-.glow {
-  background: linear-gradient(to bottom right, #08111f, #07253b);
-}
-
-.v16 {
-  text-align: center;
-}
-
-.contact {
-  display: grid;
-  grid-template-columns: 1fr 420px;
-  gap: 40px;
-}
-
-.form {
-  background: rgba(15,23,42,0.75);
-  padding: 30px;
-  border-radius: 28px;
-  border: 1px solid rgba(0,255,255,0.1);
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.form input,
-.form select {
-  padding: 15px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,255,255,0.1);
-  background: rgba(255,255,255,0.05);
-  color: white;
-  font-size: 16px;
-}
-.form select option {
-  background: #08111f;
-  color: white;
-}
-footer {
-  padding: 40px 60px;
-  border-top: 1px solid rgba(0,255,255,0.1);
-  display: flex;
-  justify-content: space-between;
-  color: #8a9bb5;
-}
-
-@media (max-width: 1000px) {
-  .hero,
-  .contact,
-  .split,
-  .cards {
-    grid-template-columns: 1fr;
+  function handleLogin(e) {
+    e.preventDefault();
+    const staff = STAFF[u.trim().toLowerCase()];
+    if (staff && staff.password === p) {
+      onLogin({ username: u, ...staff });
+    } else {
+      setErr("Incorrect username or password.");
+    }
   }
 
-  .hero h1 {
-    font-size: 52px;
-  }
-
-  .links {
-    display: none;
-  }
-
-  .menuBtn {
-    display: block;
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 28px;
-  }
-
-  .links.open {
-    display: flex;
-    flex-direction: column;
-    position: absolute;
-    top: 90px;
-    right: 20px;
-    background: #08111f;
-    padding: 20px;
-    border-radius: 20px;
-  }
-}.whatsapp-float {
-  position: fixed;
-  right: 25px;
-  bottom: 25px;
-  background: #25D366;
-  color: white;
-  padding: 16px 24px;
-  border-radius: 999px;
-  text-decoration: none;
-  font-weight: bold;
-  z-index: 9999;
-  box-shadow: 0 0 25px rgba(37,211,102,0.55);
-  transition: 0.3s ease;
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-logo">HD</div>
+        <h1>Hendors Diagnostics</h1>
+        <p className="login-sub">Staff Portal</p>
+        <form onSubmit={handleLogin}>
+          <input
+            placeholder="Username"
+            value={u}
+            onChange={e => { setU(e.target.value); setErr(""); }}
+            autoComplete="username"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={p}
+            onChange={e => { setP(e.target.value); setErr(""); }}
+            autoComplete="current-password"
+          />
+          {err && <p className="login-err">{err}</p>}
+          <button type="submit">Sign in</button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
-.whatsapp-float:hover {
-  transform: scale(1.08);
-  box-shadow: 0 0 40px rgba(37,211,102,0.9);
-}.brand-banner {
-  max-width: 360px;
-  overflow: hidden;
+// ── SHELL ─────────────────────────────────────────────────────────────────────
+function Shell({ user, onLogout, page, setPage, children }) {
+  const nav = [
+    { id: "patients", label: "Patients", icon: "👤" },
+    { id: "bookings", label: "Bookings", icon: "📅" },
+    { id: "billing", label: "Billing", icon: "💳" },
+    { id: "reports", label: "Reports", icon: "📋" },
+    { id: "intake", label: "Intake", icon: "📥" },
+  ];
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <span className="brand-hd">HD</span>
+          <span className="brand-name">FrontDesk</span>
+        </div>
+        <nav className="sidebar-nav">
+          {nav.map(n => (
+            <button
+              key={n.id}
+              className={`nav-item ${page === n.id ? "active" : ""}`}
+              onClick={() => setPage(n.id)}
+            >
+              <span className="nav-icon">{n.icon}</span>
+              <span>{n.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-user">
+          <div className="user-info">
+            <span className="user-name">{user.name}</span>
+            <span className="user-role">{user.role === "admin" ? "Admin" : "Reception"}</span>
+          </div>
+          <button className="logout-btn" onClick={onLogout}>Sign out</button>
+        </div>
+      </aside>
+      <main className="main-content">{children}</main>
+    </div>
+  );
 }
 
-.header-banner {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 18px;
-}.contact-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 28px;
-  margin-top: 40px;
+// ── PATIENTS ──────────────────────────────────────────────────────────────────
+function Patients() {
+  const [patients, setPatients] = React.useState([]);
+  const [search, setSearch] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState("");
+
+  React.useEffect(() => {
+    sbFetch("patients?select=*&order=created_at.desc&limit=200")
+      .then(setPatients)
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = patients.filter(p =>
+    [p.full_name, p.id_number, p.phone, p.medical_aid]
+      .join(" ").toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Patient Register</h2>
+        <span className="badge">{patients.length} patients</span>
+      </div>
+      <input
+        className="search-input"
+        placeholder="Search by name, ID, phone or medical aid…"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+      />
+      {loading && <p className="loading">Loading…</p>}
+      {err && <p className="error">⚠ {err}</p>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>ID Number</th><th>Phone</th>
+              <th>Medical Aid</th><th>DOB</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(p => (
+              <tr key={p.id}>
+                <td><strong>{p.full_name}</strong></td>
+                <td>{p.id_number || "—"}</td>
+                <td>{p.phone || "—"}</td>
+                <td>{p.medical_aid || "Cash"}</td>
+                <td>{p.dob || "—"}</td>
+              </tr>
+            ))}
+            {!loading && filtered.length === 0 && (
+              <tr><td colSpan={5} className="empty">No patients found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
-.contact-card {
-  background: rgba(10, 18, 40, 0.88);
-  border: 1px solid rgba(0, 255, 255, 0.15);
-  border-radius: 24px;
-  padding: 28px;
-  color: white;
-  box-shadow: 0 0 25px rgba(0, 255, 255, 0.08);
-  transition: 0.3s ease;
+// ── BOOKINGS ──────────────────────────────────────────────────────────────────
+function Bookings() {
+  const [bookings, setBookings] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState("");
+
+  React.useEffect(() => {
+    sbFetch("bookings?select=*&order=created_at.desc&limit=200")
+      .then(setBookings)
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Bookings</h2>
+        <span className="badge">{bookings.length} total</span>
+      </div>
+      {loading && <p className="loading">Loading…</p>}
+      {err && <p className="error">⚠ {err}</p>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Patient</th><th>Phone</th><th>Scan</th>
+              <th>Branch</th><th>Date</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bookings.map(b => (
+              <tr key={b.id}>
+                <td><strong>{b.full_name || b.name}</strong></td>
+                <td>{b.phone || "—"}</td>
+                <td>{b.scan_type || b.scan || "—"}</td>
+                <td>{b.branch || "—"}</td>
+                <td>{b.preferred_date || b.date || "—"}</td>
+                <td><span className={`status status-${(b.status||"pending").toLowerCase()}`}>{b.status || "Pending"}</span></td>
+              </tr>
+            ))}
+            {!loading && bookings.length === 0 && (
+              <tr><td colSpan={6} className="empty">No bookings found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
-.contact-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 0 35px rgba(0, 255, 255, 0.18);
+// ── BILLING ───────────────────────────────────────────────────────────────────
+function Billing() {
+  const [items, setItems] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState("");
+  const [filter, setFilter] = React.useState("all");
+
+  React.useEffect(() => {
+    sbFetch("hd_billing_queue?select=*&order=created_at.desc&limit=300")
+      .then(setItems)
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = filter === "all" ? items : items.filter(i => (i.status || "").toLowerCase() === filter);
+  const total = filtered.reduce((s, i) => s + (parseFloat(i.amount_due) || 0), 0);
+  const paid = filtered.reduce((s, i) => s + (parseFloat(i.amount_paid) || 0), 0);
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Billing Queue</h2>
+        <span className="badge">{filtered.length} invoices</span>
+      </div>
+      <div className="billing-stats">
+        <div className="stat-card"><span>Total Due</span><strong>R {total.toLocaleString()}</strong></div>
+        <div className="stat-card green"><span>Total Paid</span><strong>R {paid.toLocaleString()}</strong></div>
+        <div className="stat-card orange"><span>Outstanding</span><strong>R {(total - paid).toLocaleString()}</strong></div>
+      </div>
+      <div className="filter-row">
+        {["all","pending","paid","partial"].map(f => (
+          <button key={f} className={`filter-btn ${filter===f?"active":""}`} onClick={() => setFilter(f)}>
+            {f.charAt(0).toUpperCase()+f.slice(1)}
+          </button>
+        ))}
+      </div>
+      {loading && <p className="loading">Loading…</p>}
+      {err && <p className="error">⚠ {err}</p>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Invoice</th><th>Patient</th><th>Exam</th>
+              <th>Due</th><th>Paid</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(b => (
+              <tr key={b.id}>
+                <td className="mono">{b.invoice_no || "—"}</td>
+                <td><strong>{b.patient_name}</strong></td>
+                <td>{b.exam_name || b.study_type || "—"}</td>
+                <td>R {parseFloat(b.amount_due||0).toLocaleString()}</td>
+                <td>R {parseFloat(b.amount_paid||0).toLocaleString()}</td>
+                <td><span className={`status status-${(b.status||"pending").toLowerCase()}`}>{b.status || "Pending"}</span></td>
+              </tr>
+            ))}
+            {!loading && filtered.length === 0 && (
+              <tr><td colSpan={6} className="empty">No billing records</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
-.contact-card h3 {
-  color: #31eaff;
-  margin-bottom: 18px;
-  font-size: 28px;
+// ── REPORTS ───────────────────────────────────────────────────────────────────
+function Reports({ user }) {
+  const [reports, setReports] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState("");
+  const [search, setSearch] = React.useState("");
+
+  React.useEffect(() => {
+    sbFetch("reports?select=*&order=created_at.desc&limit=200")
+      .then(setReports)
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = reports.filter(r =>
+    [r.patient_name, r.study_type, r.referring_doctor]
+      .join(" ").toLowerCase().includes(search.toLowerCase())
+  );
+
+  function sendWhatsApp(r) {
+    const msg = encodeURIComponent(
+      `Hendors Diagnostics\n\nReport ready for: ${r.patient_name}\nStudy: ${r.study_type || ""}\nDate: ${r.report_date || r.created_at?.slice(0,10) || ""}\n\nPlease collect or arrange delivery.`
+    );
+    window.open(`https://wa.me/27${(r.patient_phone||"").replace(/^0/,"")}?text=${msg}`, "_blank");
+  }
+
+  function sendEmail(r) {
+    const subject = encodeURIComponent(`Hendors Diagnostics — Report for ${r.patient_name}`);
+    const body = encodeURIComponent(
+      `Dear ${r.patient_name},\n\nYour report from Hendors Diagnostics is ready.\nStudy: ${r.study_type || ""}\nDate: ${r.report_date || r.created_at?.slice(0,10) || ""}\n\nPlease contact us to collect your report.\n\nHendors Diagnostics\n072 763 6282`
+    );
+    window.open(`mailto:${r.patient_email||""}?subject=${subject}&body=${body}`);
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Reports</h2>
+        <span className="badge">{reports.length} reports</span>
+      </div>
+      <input
+        className="search-input"
+        placeholder="Search by patient, study or doctor…"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+      />
+      {loading && <p className="loading">Loading…</p>}
+      {err && <p className="error">⚠ {err}</p>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Patient</th><th>Study</th><th>Doctor</th>
+              <th>Date</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(r => (
+              <tr key={r.id}>
+                <td><strong>{r.patient_name}</strong></td>
+                <td>{r.study_type || "—"}</td>
+                <td>{r.referring_doctor || "—"}</td>
+                <td>{r.report_date || r.created_at?.slice(0,10) || "—"}</td>
+                <td><span className={`status status-${(r.status||"draft").toLowerCase()}`}>{r.status || "Draft"}</span></td>
+                <td className="actions-cell">
+                  <button className="act-btn whatsapp" onClick={() => sendWhatsApp(r)} title="WhatsApp">💬</button>
+                  <button className="act-btn email" onClick={() => sendEmail(r)} title="Email">✉️</button>
+                  {r.pdf_url && (
+                    <a className="act-btn print" href={r.pdf_url} target="_blank" rel="noreferrer" title="Print/View PDF">🖨️</a>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!loading && filtered.length === 0 && (
+              <tr><td colSpan={6} className="empty">No reports found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
-.contact-card p {
-  margin: 8px 0;
-  line-height: 1.6;
-  color: #d7e7ff;
-}.map-button {
-  display: inline-block;
-  margin: 14px 0 22px;
-  padding: 12px 18px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #00e5ff, #00ffa3);
-  color: #04111f;
-  font-weight: 700;
-  text-decoration: none;
-  transition: 0.3s ease;
-  box-shadow: 0 0 20px rgba(0, 255, 200, 0.25);
+// ── INTAKE ────────────────────────────────────────────────────────────────────
+function Intake() {
+  const [items, setItems] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState("");
+
+  React.useEffect(() => {
+    sbFetch("pending_intake?select=*&order=created_at.desc&limit=100")
+      .then(setItems)
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function approve(item) {
+    try {
+      await sbFetch(`patients`, {
+        method: "POST",
+        body: JSON.stringify({
+          full_name: item.full_name,
+          id_number: item.id_number,
+          dob: item.dob,
+          sex: item.sex,
+          phone: item.phone,
+          email: item.email,
+          address: item.address,
+          medical_aid: item.medical_aid,
+          medical_aid_no: item.medical_aid_no,
+          referring_doctor: item.referring_doctor,
+        }),
+      });
+      await sbFetch(`pending_intake?id=eq.${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "Approved" }),
+      });
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
+    } catch (e) {
+      alert("Error approving: " + e.message);
+    }
+  }
+
+  const pending = items.filter(i => i.status !== "Approved");
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Patient Intake</h2>
+        <span className="badge orange">{pending.length} pending</span>
+      </div>
+      {loading && <p className="loading">Loading…</p>}
+      {err && <p className="error">⚠ {err}</p>}
+      <div className="intake-grid">
+        {items.map(item => (
+          <div key={item.id} className={`intake-card ${item.status === "Approved" ? "approved" : ""}`}>
+            <div className="intake-name">{item.full_name}</div>
+            <div className="intake-details">
+              <span>📱 {item.phone || "—"}</span>
+              <span>🪪 {item.id_number || "—"}</span>
+              <span>🏥 {item.medical_aid || "Cash"}</span>
+              <span>👨‍⚕️ {item.referring_doctor || "—"}</span>
+            </div>
+            <div className="intake-time">{item.created_at?.slice(0,16).replace("T"," ") || ""}</div>
+            {item.status === "Approved"
+              ? <span className="status status-approved">✓ Approved</span>
+              : <button className="approve-btn" onClick={() => approve(item)}>Approve → Add to Register</button>
+            }
+          </div>
+        ))}
+        {!loading && items.length === 0 && <p className="empty">No intake submissions yet</p>}
+      </div>
+    </div>
+  );
 }
 
-.map-button:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 0 30px rgba(0, 255, 200, 0.45);
-}@media (max-width: 768px) {
-  .nav {
-    padding: 14px 16px;
-    align-items: center;
-  }
-
-  .brand-banner {
-    max-width: 230px;
-  }
-
-  .header-banner {
-    width: 100%;
-  }
-
-  .hero {
-    grid-template-columns: 1fr;
-    padding: 55px 18px;
-  }
-
-  .hero h1 {
-    font-size: 42px;
-    line-height: 1.05;
-  }
-
-  .hero p {
-    font-size: 16px;
-  }
-
-  .panel {
-    padding: 24px;
-  }
-
-  .section {
-    padding: 55px 18px;
-  }
-
-  .section h2 {
-    font-size: 36px;
-  }
-
-  .cards,
-  .split,
-  .contact-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .form {
-    width: 100%;
-  }
-
-  .whatsapp-float {
-    right: 14px;
-    bottom: 14px;
-    padding: 13px 18px;
-    font-size: 14px;
-  }
-}.pricing-grid {
-  margin-top: 35px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 18px;
-}
-
-.price-card {
-  background: rgba(15,23,42,0.75);
-  border: 1px solid rgba(0,255,255,0.12);
-  border-radius: 22px;
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  box-shadow: 0 0 22px rgba(0,255,255,0.06);
-}
-
-.price-card span {
-  color: #d7e7ff;
-  line-height: 1.4;
-}
-
-.price-card strong {
-  color: #31eaff;
-  white-space: nowrap;
-}
-
-.pricing-note {
-  margin-top: 25px;
-  font-size: 14px;
-  color: #9fb6cc;
-}
