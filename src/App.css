@@ -1,469 +1,194 @@
-import React, { useState } from "react";
-import "./App.css";
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f4f7fb; color: #1a2636; font-size: 14px; }
 
-// ── Supabase config ──────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"; // ← paste your eyJ... key here
-
-async function sbFetch(path, opts = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Prefer: "return=representation",
-      ...opts.headers,
-    },
-    ...opts,
-  });
-  if (!res.ok) throw new Error(`Supabase ${res.status}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : [];
+/* ── LOGIN ────────────────────────────────────────────────────────────────── */
+.login-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #0a1628 0%, #1e3a5f 60%, #0a1628 100%);
 }
-
-// ── Staff credentials (simple — upgrade to Supabase Auth later) ──────────────
-const STAFF = {
-  hendor: { password: "hd2025admin", role: "admin", name: "Dr Hendor" },
-  reception: { password: "hd2025desk", role: "reception", name: "Reception" },
-};
-
-// ── Colour palette ───────────────────────────────────────────────────────────
-// Deep navy #0a1628, steel blue #1e3a5f, accent #2d9cdb, white, light grey #f4f7fb
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [page, setPage] = useState("patients");
-
-  if (!user) return <Login onLogin={setUser} />;
-  return (
-    <Shell user={user} onLogout={() => setUser(null)} page={page} setPage={setPage}>
-      {page === "patients" && <Patients />}
-      {page === "bookings" && <Bookings />}
-      {page === "billing" && <Billing />}
-      {page === "reports" && <Reports user={user} />}
-      {page === "intake" && <Intake />}
-    </Shell>
-  );
+.login-card {
+  background: #fff; border-radius: 16px; padding: 48px 40px;
+  width: 360px; box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
 }
-
-// ── LOGIN ─────────────────────────────────────────────────────────────────────
-function Login({ onLogin }) {
-  const [u, setU] = useState("");
-  const [p, setP] = useState("");
-  const [err, setErr] = useState("");
-
-  function handleLogin(e) {
-    e.preventDefault();
-    const staff = STAFF[u.trim().toLowerCase()];
-    if (staff && staff.password === p) {
-      onLogin({ username: u, ...staff });
-    } else {
-      setErr("Incorrect username or password.");
-    }
-  }
-
-  return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-logo">HD</div>
-        <h1>Hendors Diagnostics</h1>
-        <p className="login-sub">Staff Portal</p>
-        <form onSubmit={handleLogin}>
-          <input
-            placeholder="Username"
-            value={u}
-            onChange={e => { setU(e.target.value); setErr(""); }}
-            autoComplete="username"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={p}
-            onChange={e => { setP(e.target.value); setErr(""); }}
-            autoComplete="current-password"
-          />
-          {err && <p className="login-err">{err}</p>}
-          <button type="submit">Sign in</button>
-        </form>
-      </div>
-    </div>
-  );
+.login-logo {
+  width: 56px; height: 56px; background: #1e3a5f; color: #fff;
+  border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px;
 }
-
-// ── SHELL ─────────────────────────────────────────────────────────────────────
-function Shell({ user, onLogout, page, setPage, children }) {
-  const nav = [
-    { id: "patients", label: "Patients", icon: "👤" },
-    { id: "bookings", label: "Bookings", icon: "📅" },
-    { id: "billing", label: "Billing", icon: "💳" },
-    { id: "reports", label: "Reports", icon: "📋" },
-    { id: "intake", label: "Intake", icon: "📥" },
-  ];
-
-  return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <span className="brand-hd">HD</span>
-          <span className="brand-name">FrontDesk</span>
-        </div>
-        <nav className="sidebar-nav">
-          {nav.map(n => (
-            <button
-              key={n.id}
-              className={`nav-item ${page === n.id ? "active" : ""}`}
-              onClick={() => setPage(n.id)}
-            >
-              <span className="nav-icon">{n.icon}</span>
-              <span>{n.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-user">
-          <div className="user-info">
-            <span className="user-name">{user.name}</span>
-            <span className="user-role">{user.role === "admin" ? "Admin" : "Reception"}</span>
-          </div>
-          <button className="logout-btn" onClick={onLogout}>Sign out</button>
-        </div>
-      </aside>
-      <main className="main-content">{children}</main>
-    </div>
-  );
+.login-card h1 { font-size: 20px; font-weight: 700; color: #0a1628; text-align: center; }
+.login-sub { font-size: 13px; color: #6b7a8d; margin-bottom: 16px; }
+.login-card form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.login-card input {
+  width: 100%; padding: 12px 14px; border: 1.5px solid #dde3ec; border-radius: 8px;
+  font-size: 14px; outline: none; transition: border 0.2s;
 }
-
-// ── PATIENTS ──────────────────────────────────────────────────────────────────
-function Patients() {
-  const [patients, setPatients] = React.useState([]);
-  const [search, setSearch] = React.useState("");
-  const [loading, setLoading] = React.useState(true);
-  const [err, setErr] = React.useState("");
-
-  React.useEffect(() => {
-    sbFetch("patients?select=*&order=created_at.desc&limit=200")
-      .then(setPatients)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const filtered = patients.filter(p =>
-    [p.full_name, p.id_number, p.phone, p.medical_aid]
-      .join(" ").toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Patient Register</h2>
-        <span className="badge">{patients.length} patients</span>
-      </div>
-      <input
-        className="search-input"
-        placeholder="Search by name, ID, phone or medical aid…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
-      {loading && <p className="loading">Loading…</p>}
-      {err && <p className="error">⚠ {err}</p>}
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th><th>ID Number</th><th>Phone</th>
-              <th>Medical Aid</th><th>DOB</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(p => (
-              <tr key={p.id}>
-                <td><strong>{p.full_name}</strong></td>
-                <td>{p.id_number || "—"}</td>
-                <td>{p.phone || "—"}</td>
-                <td>{p.medical_aid || "Cash"}</td>
-                <td>{p.dob || "—"}</td>
-              </tr>
-            ))}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan={5} className="empty">No patients found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+.login-card input:focus { border-color: #2d9cdb; }
+.login-err { color: #e53935; font-size: 12px; text-align: center; }
+.login-card button[type="submit"] {
+  width: 100%; padding: 13px; background: #1e3a5f; color: #fff;
+  border: none; border-radius: 8px; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background 0.2s; margin-top: 4px;
 }
+.login-card button[type="submit"]:hover { background: #2d9cdb; }
 
-// ── BOOKINGS ──────────────────────────────────────────────────────────────────
-function Bookings() {
-  const [bookings, setBookings] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [err, setErr] = React.useState("");
+/* ── SHELL ────────────────────────────────────────────────────────────────── */
+.shell { display: flex; min-height: 100vh; }
 
-  React.useEffect(() => {
-    sbFetch("bookings?select=*&order=created_at.desc&limit=200")
-      .then(setBookings)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Bookings</h2>
-        <span className="badge">{bookings.length} total</span>
-      </div>
-      {loading && <p className="loading">Loading…</p>}
-      {err && <p className="error">⚠ {err}</p>}
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Patient</th><th>Phone</th><th>Scan</th>
-              <th>Branch</th><th>Date</th><th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bookings.map(b => (
-              <tr key={b.id}>
-                <td><strong>{b.full_name || b.name}</strong></td>
-                <td>{b.phone || "—"}</td>
-                <td>{b.scan_type || b.scan || "—"}</td>
-                <td>{b.branch || "—"}</td>
-                <td>{b.preferred_date || b.date || "—"}</td>
-                <td><span className={`status status-${(b.status||"pending").toLowerCase()}`}>{b.status || "Pending"}</span></td>
-              </tr>
-            ))}
-            {!loading && bookings.length === 0 && (
-              <tr><td colSpan={6} className="empty">No bookings found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+.sidebar {
+  width: 220px; background: #0a1628; color: #fff;
+  display: flex; flex-direction: column; position: fixed;
+  top: 0; left: 0; bottom: 0; z-index: 100;
 }
-
-// ── BILLING ───────────────────────────────────────────────────────────────────
-function Billing() {
-  const [items, setItems] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [err, setErr] = React.useState("");
-  const [filter, setFilter] = React.useState("all");
-
-  React.useEffect(() => {
-    sbFetch("hd_billing_queue?select=*&order=created_at.desc&limit=300")
-      .then(setItems)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const filtered = filter === "all" ? items : items.filter(i => (i.status || "").toLowerCase() === filter);
-  const total = filtered.reduce((s, i) => s + (parseFloat(i.amount_due) || 0), 0);
-  const paid = filtered.reduce((s, i) => s + (parseFloat(i.amount_paid) || 0), 0);
-
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Billing Queue</h2>
-        <span className="badge">{filtered.length} invoices</span>
-      </div>
-      <div className="billing-stats">
-        <div className="stat-card"><span>Total Due</span><strong>R {total.toLocaleString()}</strong></div>
-        <div className="stat-card green"><span>Total Paid</span><strong>R {paid.toLocaleString()}</strong></div>
-        <div className="stat-card orange"><span>Outstanding</span><strong>R {(total - paid).toLocaleString()}</strong></div>
-      </div>
-      <div className="filter-row">
-        {["all","pending","paid","partial"].map(f => (
-          <button key={f} className={`filter-btn ${filter===f?"active":""}`} onClick={() => setFilter(f)}>
-            {f.charAt(0).toUpperCase()+f.slice(1)}
-          </button>
-        ))}
-      </div>
-      {loading && <p className="loading">Loading…</p>}
-      {err && <p className="error">⚠ {err}</p>}
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Invoice</th><th>Patient</th><th>Exam</th>
-              <th>Due</th><th>Paid</th><th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(b => (
-              <tr key={b.id}>
-                <td className="mono">{b.invoice_no || "—"}</td>
-                <td><strong>{b.patient_name}</strong></td>
-                <td>{b.exam_name || b.study_type || "—"}</td>
-                <td>R {parseFloat(b.amount_due||0).toLocaleString()}</td>
-                <td>R {parseFloat(b.amount_paid||0).toLocaleString()}</td>
-                <td><span className={`status status-${(b.status||"pending").toLowerCase()}`}>{b.status || "Pending"}</span></td>
-              </tr>
-            ))}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="empty">No billing records</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+.sidebar-brand {
+  padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex; align-items: center; gap: 10px;
 }
-
-// ── REPORTS ───────────────────────────────────────────────────────────────────
-function Reports({ user }) {
-  const [reports, setReports] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [err, setErr] = React.useState("");
-  const [search, setSearch] = React.useState("");
-
-  React.useEffect(() => {
-    sbFetch("reports?select=*&order=created_at.desc&limit=200")
-      .then(setReports)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const filtered = reports.filter(r =>
-    [r.patient_name, r.study_type, r.referring_doctor]
-      .join(" ").toLowerCase().includes(search.toLowerCase())
-  );
-
-  function sendWhatsApp(r) {
-    const msg = encodeURIComponent(
-      `Hendors Diagnostics\n\nReport ready for: ${r.patient_name}\nStudy: ${r.study_type || ""}\nDate: ${r.report_date || r.created_at?.slice(0,10) || ""}\n\nPlease collect or arrange delivery.`
-    );
-    window.open(`https://wa.me/27${(r.patient_phone||"").replace(/^0/,"")}?text=${msg}`, "_blank");
-  }
-
-  function sendEmail(r) {
-    const subject = encodeURIComponent(`Hendors Diagnostics — Report for ${r.patient_name}`);
-    const body = encodeURIComponent(
-      `Dear ${r.patient_name},\n\nYour report from Hendors Diagnostics is ready.\nStudy: ${r.study_type || ""}\nDate: ${r.report_date || r.created_at?.slice(0,10) || ""}\n\nPlease contact us to collect your report.\n\nHendors Diagnostics\n072 763 6282`
-    );
-    window.open(`mailto:${r.patient_email||""}?subject=${subject}&body=${body}`);
-  }
-
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Reports</h2>
-        <span className="badge">{reports.length} reports</span>
-      </div>
-      <input
-        className="search-input"
-        placeholder="Search by patient, study or doctor…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
-      {loading && <p className="loading">Loading…</p>}
-      {err && <p className="error">⚠ {err}</p>}
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Patient</th><th>Study</th><th>Doctor</th>
-              <th>Date</th><th>Status</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(r => (
-              <tr key={r.id}>
-                <td><strong>{r.patient_name}</strong></td>
-                <td>{r.study_type || "—"}</td>
-                <td>{r.referring_doctor || "—"}</td>
-                <td>{r.report_date || r.created_at?.slice(0,10) || "—"}</td>
-                <td><span className={`status status-${(r.status||"draft").toLowerCase()}`}>{r.status || "Draft"}</span></td>
-                <td className="actions-cell">
-                  <button className="act-btn whatsapp" onClick={() => sendWhatsApp(r)} title="WhatsApp">💬</button>
-                  <button className="act-btn email" onClick={() => sendEmail(r)} title="Email">✉️</button>
-                  {r.pdf_url && (
-                    <a className="act-btn print" href={r.pdf_url} target="_blank" rel="noreferrer" title="Print/View PDF">🖨️</a>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="empty">No reports found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+.brand-hd {
+  background: #2d9cdb; color: #fff; width: 36px; height: 36px;
+  border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; letter-spacing: -1px; flex-shrink: 0;
 }
+.brand-name { font-size: 15px; font-weight: 600; color: #e8edf5; }
 
-// ── INTAKE ────────────────────────────────────────────────────────────────────
-function Intake() {
-  const [items, setItems] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [err, setErr] = React.useState("");
+.sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; border: none;
+  background: transparent; color: #8fa3bc; font-size: 14px;
+  cursor: pointer; text-align: left; width: 100%; transition: all 0.15s;
+}
+.nav-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.nav-item.active { background: #1e3a5f; color: #fff; font-weight: 600; }
+.nav-icon { font-size: 16px; width: 20px; text-align: center; }
 
-  React.useEffect(() => {
-    sbFetch("pending_intake?select=*&order=created_at.desc&limit=100")
-      .then(setItems)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
-  }, []);
+.sidebar-user {
+  padding: 16px; border-top: 1px solid rgba(255,255,255,0.08);
+}
+.user-info { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.user-name { font-size: 13px; font-weight: 600; color: #e8edf5; }
+.user-role { font-size: 11px; color: #6b8aa8; text-transform: capitalize; }
+.logout-btn {
+  width: 100%; padding: 8px; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1); color: #8fa3bc;
+  border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.15s;
+}
+.logout-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
-  async function approve(item) {
-    try {
-      await sbFetch(`patients`, {
-        method: "POST",
-        body: JSON.stringify({
-          full_name: item.full_name,
-          id_number: item.id_number,
-          dob: item.dob,
-          sex: item.sex,
-          phone: item.phone,
-          email: item.email,
-          address: item.address,
-          medical_aid: item.medical_aid,
-          medical_aid_no: item.medical_aid_no,
-          referring_doctor: item.referring_doctor,
-        }),
-      });
-      await sbFetch(`pending_intake?id=eq.${item.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "Approved" }),
-      });
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
-    } catch (e) {
-      alert("Error approving: " + e.message);
-    }
-  }
+.main-content { margin-left: 220px; flex: 1; padding: 32px; min-height: 100vh; }
 
-  const pending = items.filter(i => i.status !== "Approved");
+/* ── PAGE ─────────────────────────────────────────────────────────────────── */
+.page { max-width: 1100px; }
+.page-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+}
+.page-header h2 { font-size: 22px; font-weight: 700; color: #0a1628; }
+.badge {
+  background: #e8f4fd; color: #1e3a5f; padding: 3px 10px;
+  border-radius: 20px; font-size: 12px; font-weight: 600;
+}
+.badge.orange { background: #fff3e0; color: #e65100; }
 
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Patient Intake</h2>
-        <span className="badge orange">{pending.length} pending</span>
-      </div>
-      {loading && <p className="loading">Loading…</p>}
-      {err && <p className="error">⚠ {err}</p>}
-      <div className="intake-grid">
-        {items.map(item => (
-          <div key={item.id} className={`intake-card ${item.status === "Approved" ? "approved" : ""}`}>
-            <div className="intake-name">{item.full_name}</div>
-            <div className="intake-details">
-              <span>📱 {item.phone || "—"}</span>
-              <span>🪪 {item.id_number || "—"}</span>
-              <span>🏥 {item.medical_aid || "Cash"}</span>
-              <span>👨‍⚕️ {item.referring_doctor || "—"}</span>
-            </div>
-            <div className="intake-time">{item.created_at?.slice(0,16).replace("T"," ") || ""}</div>
-            {item.status === "Approved"
-              ? <span className="status status-approved">✓ Approved</span>
-              : <button className="approve-btn" onClick={() => approve(item)}>Approve → Add to Register</button>
-            }
-          </div>
-        ))}
-        {!loading && items.length === 0 && <p className="empty">No intake submissions yet</p>}
-      </div>
-    </div>
-  );
+/* ── SEARCH ───────────────────────────────────────────────────────────────── */
+.search-input {
+  width: 100%; max-width: 460px; padding: 10px 14px;
+  border: 1.5px solid #dde3ec; border-radius: 8px; font-size: 14px;
+  outline: none; margin-bottom: 16px; transition: border 0.2s;
+}
+.search-input:focus { border-color: #2d9cdb; }
+
+/* ── TABLE ────────────────────────────────────────────────────────────────── */
+.table-wrap {
+  background: #fff; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07); overflow-x: auto;
+}
+table { width: 100%; border-collapse: collapse; }
+thead { background: #f8fafc; }
+th {
+  padding: 12px 16px; text-align: left; font-size: 11px;
+  font-weight: 700; color: #6b7a8d; text-transform: uppercase;
+  letter-spacing: 0.5px; border-bottom: 1px solid #edf0f5;
+}
+td { padding: 12px 16px; border-bottom: 1px solid #f0f3f8; font-size: 13px; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f8fafc; }
+.mono { font-family: monospace; font-size: 12px; color: #6b7a8d; }
+td strong { color: #0a1628; font-weight: 600; }
+.empty { text-align: center; color: #9aa5b4; padding: 32px !important; }
+.loading { color: #9aa5b4; padding: 16px 0; }
+.error { color: #e53935; padding: 12px 0; font-size: 13px; }
+
+/* ── STATUS BADGES ────────────────────────────────────────────────────────── */
+.status {
+  display: inline-block; padding: 3px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; text-transform: capitalize;
+}
+.status-pending { background: #fff8e1; color: #f57c00; }
+.status-paid { background: #e8f5e9; color: #2e7d32; }
+.status-partial { background: #e3f2fd; color: #1565c0; }
+.status-approved { background: #e8f5e9; color: #2e7d32; }
+.status-draft { background: #f3e5f5; color: #6a1b9a; }
+.status-final { background: #e8f5e9; color: #2e7d32; }
+.status-sent { background: #e3f2fd; color: #1565c0; }
+
+/* ── BILLING STATS ────────────────────────────────────────────────────────── */
+.billing-stats { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.stat-card {
+  background: #fff; border-radius: 10px; padding: 16px 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07); min-width: 160px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.stat-card span { font-size: 11px; color: #6b7a8d; font-weight: 600; text-transform: uppercase; }
+.stat-card strong { font-size: 20px; font-weight: 700; color: #0a1628; }
+.stat-card.green strong { color: #2e7d32; }
+.stat-card.orange strong { color: #e65100; }
+
+/* ── FILTER BUTTONS ───────────────────────────────────────────────────────── */
+.filter-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.filter-btn {
+  padding: 7px 16px; border-radius: 20px; border: 1.5px solid #dde3ec;
+  background: #fff; color: #6b7a8d; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.filter-btn:hover { border-color: #2d9cdb; color: #2d9cdb; }
+.filter-btn.active { background: #1e3a5f; border-color: #1e3a5f; color: #fff; }
+
+/* ── ACTIONS ──────────────────────────────────────────────────────────────── */
+.actions-cell { display: flex; gap: 6px; align-items: center; }
+.act-btn {
+  width: 32px; height: 32px; border-radius: 7px; border: 1.5px solid #dde3ec;
+  background: #fff; cursor: pointer; font-size: 15px; display: flex;
+  align-items: center; justify-content: center; text-decoration: none;
+  transition: all 0.15s;
+}
+.act-btn:hover { border-color: #2d9cdb; background: #e8f4fd; }
+
+/* ── INTAKE GRID ──────────────────────────────────────────────────────────── */
+.intake-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.intake-card {
+  background: #fff; border-radius: 12px; padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07); border-left: 4px solid #2d9cdb;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.intake-card.approved { border-left-color: #4caf50; opacity: 0.7; }
+.intake-name { font-size: 16px; font-weight: 700; color: #0a1628; }
+.intake-details { display: flex; flex-direction: column; gap: 4px; }
+.intake-details span { font-size: 12px; color: #4a5568; }
+.intake-time { font-size: 11px; color: #9aa5b4; }
+.approve-btn {
+  padding: 9px 14px; background: #1e3a5f; color: #fff;
+  border: none; border-radius: 7px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s; text-align: center;
+}
+.approve-btn:hover { background: #2d9cdb; }
+
+/* ── RESPONSIVE ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar { width: 64px; }
+  .brand-name, .nav-item span:last-child, .user-info, .logout-btn { display: none; }
+  .sidebar-brand { padding: 16px 14px; justify-content: center; }
+  .nav-item { justify-content: center; padding: 12px; }
+  .main-content { margin-left: 64px; padding: 16px; }
 }
 
