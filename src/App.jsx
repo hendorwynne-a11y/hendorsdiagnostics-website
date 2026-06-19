@@ -1,9 +1,10 @@
+import ReportStudio from "./ReportStudio.jsx";
 import React, { useState } from "react";
 import "./App.css";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"; // ← paste your eyJ... key here
+const SUPABASE_ANON_KEY = ""; // ← paste your eyJ... key here
 
 async function sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -43,6 +44,10 @@ export default function App() {
       {page === "billing" && <Billing />}
       {page === "reports" && <Reports user={user} />}
       {page === "intake" && <Intake />}
+      {page === "studio" && <ReportStudio supabaseKey={SUPABASE_ANON_KEY} />}
+      {page === "password" && <ChangePassword user={user} onPasswordChanged={(newPwd) => {
+        STAFF[user.username].password = newPwd;
+      }} />}
     </Shell>
   );
 }
@@ -99,6 +104,8 @@ function Shell({ user, onLogout, page, setPage, children }) {
     { id: "billing", label: "Billing", icon: "💳" },
     { id: "reports", label: "Reports", icon: "📋" },
     { id: "intake", label: "Intake", icon: "📥" },
+    { id: "studio", label: "Report Studio", icon: "🩺", adminOnly: true },
+    { id: "password", label: "Change Password", icon: "🔑" },
   ];
 
   return (
@@ -109,7 +116,7 @@ function Shell({ user, onLogout, page, setPage, children }) {
           <span className="brand-name">FrontDesk</span>
         </div>
         <nav className="sidebar-nav">
-          {nav.map(n => (
+          {nav.filter(n => !n.adminOnly || user.role === "admin").map(n => (
             <button
               key={n.id}
               className={`nav-item ${page === n.id ? "active" : ""}`}
@@ -467,3 +474,60 @@ function Intake() {
   );
 }
 
+// ── CHANGE PASSWORD ───────────────────────────────────────────────────────────
+function ChangePassword({ user, onPasswordChanged }) {
+  const [current, setCurrent] = React.useState("");
+  const [newPwd, setNewPwd] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const [msg, setMsg] = React.useState(null);
+  const [success, setSuccess] = React.useState(false);
+
+  function handleChange(e) {
+    e.preventDefault();
+    setMsg(null);
+    if (current !== STAFF[user.username].password) {
+      setMsg("Current password is incorrect."); return;
+    }
+    if (newPwd.length < 6) {
+      setMsg("New password must be at least 6 characters."); return;
+    }
+    if (newPwd !== confirm) {
+      setMsg("New passwords do not match."); return;
+    }
+    STAFF[user.username].password = newPwd;
+    onPasswordChanged(newPwd);
+    setSuccess(true);
+    setCurrent(""); setNewPwd(""); setConfirm("");
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Change Password</h2>
+      </div>
+      <div className="pw-card">
+        <p className="pw-info">Changing password for: <strong>{user.name}</strong> ({user.username})</p>
+        <form onSubmit={handleChange}>
+          <div className="pw-field">
+            <label>Current Password</label>
+            <input type="password" value={current} onChange={e => { setCurrent(e.target.value); setMsg(null); setSuccess(false); }} placeholder="Enter current password" required />
+          </div>
+          <div className="pw-field">
+            <label>New Password</label>
+            <input type="password" value={newPwd} onChange={e => { setNewPwd(e.target.value); setMsg(null); setSuccess(false); }} placeholder="At least 6 characters" required />
+          </div>
+          <div className="pw-field">
+            <label>Confirm New Password</label>
+            <input type="password" value={confirm} onChange={e => { setConfirm(e.target.value); setMsg(null); setSuccess(false); }} placeholder="Repeat new password" required />
+          </div>
+          {msg && <p className="pw-error">⚠ {msg}</p>}
+          {success && <p className="pw-success">✅ Password changed successfully!</p>}
+          <button type="submit" className="pw-btn">Update Password</button>
+        </form>
+        <div className="pw-note">
+          <strong>Note:</strong> This change applies for the current session only. To make it permanent, update the STAFF passwords in <code>App.jsx</code> on GitHub.
+        </div>
+      </div>
+    </div>
+  );
+}
