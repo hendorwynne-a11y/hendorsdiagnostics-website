@@ -25,8 +25,8 @@ async function sbFetch(path, opts = {}) {
 
 // ── Staff credentials (simple — upgrade to Supabase Auth later) ──────────────
 const STAFF = {
-  hendor: { password: "hd2025admin", role: "admin", name: "Dr Hendor" },
-  reception: { password: "hd2025desk", role: "reception", name: "Reception" },
+  hendor: { password: "hd1", role: "admin", name: "Hendor L. Wynne" },
+  reception: { password: "hd2", role: "reception", name: "Reception" },
 };
 
 // ── Colour palette ───────────────────────────────────────────────────────────
