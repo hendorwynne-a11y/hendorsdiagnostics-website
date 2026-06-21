@@ -28,18 +28,17 @@ async function sbFetch(path, opts={}, key) {
   return text ? JSON.parse(text) : [];
 }
 
-async function aiGenerate(prompt, apiKey) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+async function aiGenerate(prompt) {
+  const res = await fetch("/api/claude", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
       max_tokens: 1000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
-  if (!res.ok) throw new Error("AI request failed");
   const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "AI request failed");
   return data.content?.[0]?.text || "";
 }
 
@@ -228,17 +227,16 @@ export default function ReportStudio({ supabaseKey }) {
         content.push({ type: "image", source: { type: "base64", media_type: mediaType, data: base64 } });
       });
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
           max_tokens: 1000,
           messages: [{ role: "user", content }],
         }),
       });
-      if (!res.ok) throw new Error("AI request failed: " + res.status);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI request failed");
       let text = data.content?.[0]?.text || "{}";
       text = text.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(text);

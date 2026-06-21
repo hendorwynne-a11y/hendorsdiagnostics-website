@@ -4,7 +4,7 @@ import "./App.css";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"
+const SUPABASE_ANON_KEY = ""; // ← paste your eyJ... key here
 
 async function sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -25,8 +25,8 @@ async function sbFetch(path, opts = {}) {
 
 // ── Staff credentials (simple — upgrade to Supabase Auth later) ──────────────
 const STAFF = {
-  hendor: { password: "hd1", role: "admin", name: "Hendor L. Wynne" },
-  reception: { password: "hd2", role: "reception", name: "Reception" },
+  hendor: { password: "hd2025admin", role: "admin", name: "Dr Hendor" },
+  reception: { password: "hd2025desk", role: "reception", name: "Reception" },
 };
 
 // ── Colour palette ───────────────────────────────────────────────────────────
