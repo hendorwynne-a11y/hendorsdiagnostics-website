@@ -171,6 +171,96 @@ export default function ReportStudio({ supabaseKey }) {
     setShowPatientDrop(false);
   }
 
+  const [pastedImages, setPastedImages] = useState([]);
+  const [extracting, setExtracting] = useState(false);
+  const fileInputRef = useRef(null);
+  const pasteZoneRef = useRef(null);
+
+  function handlePaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let item of items) {
+      if (item.type.startsWith("image/")) {
+        const blob = item.getAsFile();
+        const reader = new FileReader();
+        reader.onload = () => {
+          setPastedImages(prev => [...prev, { id: Date.now()+Math.random(), dataUrl: reader.result }]);
+        };
+        reader.readAsDataURL(blob);
+        e.preventDefault();
+      }
+    }
+  }
+
+  function handleFileSelect(e) {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPastedImages(prev => [...prev, { id: Date.now()+Math.random(), dataUrl: reader.result }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
+  }
+
+  function removeImage(id) {
+    setPastedImages(prev => prev.filter(img => img.id !== id));
+  }
+
+  async function aiExtractFromImages() {
+    if (pastedImages.length === 0) { setStatus({type:"error", msg:"Paste or upload an ultrasound screenshot first"}); return; }
+    setExtracting(true); setStatus(null);
+    try {
+      const content = [
+        { type: "text", text:
+          "Extract patient/case details and all ultrasound/fetal/biometry measurements visible in the attached ultrasound screenshot(s). " +
+          "Extract EDD/EDC/due date and EFW/Hadlock estimated fetal weight whenever visible. " +
+          "Return STRICT JSON only with keys: patient_name, patient_id, age, gender, dob, phone, referring_doctor, study_title, measurements_text. " +
+          "measurements_text must be clean separate lines, one measurement per line, e.g.:\\n" +
+          "BPD: 43.96 mm\\nHC: 164.71 mm\\nAC: 138.78 mm\\nFL: 28.95 mm\\nFHR: 162 bpm\\nGS: 19.16 mm\\nEFW: 618 g\\nEDD: 13-06-2026\\n" +
+          "Do not invent values. If a field is not visible, leave it blank. Return ONLY the JSON object, no markdown, no explanation."
+        }
+      ];
+      pastedImages.slice(-4).forEach(img => {
+        const base64 = img.dataUrl.split(",")[1];
+        const mediaType = img.dataUrl.match(/data:(image\/\w+);/)?.[1] || "image/png";
+        content.push({ type: "image", source: { type: "base64", media_type: mediaType, data: base64 } });
+      });
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{ role: "user", content }],
+        }),
+      });
+      if (!res.ok) throw new Error("AI request failed: " + res.status);
+      const data = await res.json();
+      let text = data.content?.[0]?.text || "{}";
+      text = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(text);
+
+      setReport(r => ({
+        ...r,
+        patient_name: parsed.patient_name || r.patient_name,
+        patient_id: parsed.patient_id || r.patient_id,
+        age: parsed.age || r.age,
+        gender: parsed.gender || r.gender,
+        dob: parsed.dob || r.dob,
+        phone: parsed.phone || r.phone,
+        referring_doctor: parsed.referring_doctor || r.referring_doctor,
+        study_title: parsed.study_title || r.study_title,
+        measurements: parsed.measurements_text ? (r.measurements ? r.measurements + "\n" + parsed.measurements_text : parsed.measurements_text) : r.measurements,
+      }));
+      setStatus({type:"success", msg:"Patient info and measurements extracted ✓"});
+    } catch(e) {
+      setStatus({type:"error", msg:"Extraction failed: " + e.message});
+    } finally { setExtracting(false); }
+  }
+
   async function generateReport() {
     if (!report.patient_name) { setStatus({type:"error", msg:"Enter patient name first"}); return; }
     setGenerating(true); setStatus(null);
@@ -379,6 +469,29 @@ ${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-s
                 </div>
                 <div className="s-field"><label>Performed By</label><input value={report.performed_by} onChange={e=>setReport(r=>({...r,performed_by:e.target.value}))}/></div>
               </div>
+            </div>
+
+            <div className="s-section" onPaste={handlePaste} tabIndex={0} ref={pasteZoneRef}>
+              <div className="s-title-row">
+                <h3 className="s-title">Ultrasound Images</h3>
+                <button className="gen-btn" onClick={aiExtractFromImages} disabled={extracting || pastedImages.length===0}>
+                  {extracting ? "⏳ Extracting…" : "🤖 AI Extract Patient + Measurements"}
+                </button>
+              </div>
+              <div className="paste-zone" onClick={()=>fileInputRef.current?.click()}>
+                <p>📋 Click here then <strong>Ctrl+V</strong> to paste a snip, or click to upload an image</p>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={handleFileSelect}/>
+              </div>
+              {pastedImages.length>0 && (
+                <div className="img-thumbs">
+                  {pastedImages.map(img=>(
+                    <div key={img.id} className="img-thumb">
+                      <img src={img.dataUrl} alt="snip"/>
+                      <button className="img-remove" onClick={()=>removeImage(img.id)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="s-section">
