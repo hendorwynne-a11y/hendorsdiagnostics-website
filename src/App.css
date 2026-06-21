@@ -262,3 +262,19 @@ td strong { color: #0a1628; font-weight: 600; }
   .studio-layout { grid-template-columns: 1fr; }
   .s-row2, .s-row3 { grid-template-columns: 1fr; }
 }
+
+/* ── VOICE DICTATION ──────────────────────────────────────────────────────── */
+.dictate-wrap { position: relative; }
+.dictate-wrap .s-ta { padding-right: 44px; }
+.mic-btn {
+  position: absolute; top: 8px; right: 8px;
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1.5px solid #dde3ec; background: #fff;
+  font-size: 14px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: all .15s; z-index: 2;
+}
+.mic-btn:hover { border-color: #2d9cdb; background: #e8f4fd; }
+.mic-btn.live { background: #e53935; border-color: #e53935; color: #fff; animation: pulse-mic 1.2s infinite; }
+@keyframes pulse-mic { 0%,100%{box-shadow:0 0 0 0 rgba(229,57,53,.4)} 50%{box-shadow:0 0 0 6px rgba(229,57,53,0)} }
+.mic-live-label { position: absolute; bottom: 8px; right: 10px; font-size: 10px; font-weight: 700; color: #e53935; background: #fff; padding: 1px 6px; border-radius: 10px; }

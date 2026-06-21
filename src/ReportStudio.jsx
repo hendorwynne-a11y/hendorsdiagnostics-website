@@ -43,6 +43,77 @@ async function aiGenerate(prompt, apiKey) {
   return data.content?.[0]?.text || "";
 }
 
+// ── Voice dictation textarea ────────────────────────────────────────────────
+function DictateTextarea({ value, onChange, placeholder, rows }) {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const recogRef = useRef(null);
+  const baseTextRef = useRef("");
+
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setSupported(false); return; }
+    const recog = new SR();
+    recog.continuous = true;
+    recog.interimResults = true;
+    recog.lang = "en-ZA";
+    recog.onresult = (e) => {
+      let finalText = "";
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t + " ";
+        else interim += t;
+      }
+      if (finalText) baseTextRef.current = (baseTextRef.current + " " + finalText).trim();
+      const combined = (baseTextRef.current + " " + interim).trim();
+      onChange(combined);
+    };
+    recog.onerror = () => setListening(false);
+    recog.onend = () => setListening(false);
+    recogRef.current = recog;
+    return () => { try { recog.stop(); } catch(e){} };
+    // eslint-disable-next-line
+  }, []);
+
+  function toggleListen() {
+    if (!supported) return;
+    if (listening) {
+      recogRef.current.stop();
+      setListening(false);
+    } else {
+      baseTextRef.current = value || "";
+      try {
+        recogRef.current.start();
+        setListening(true);
+      } catch(e) {}
+    }
+  }
+
+  return (
+    <div className="dictate-wrap">
+      <textarea
+        className="s-ta"
+        rows={rows}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      {supported && (
+        <button
+          type="button"
+          className={`mic-btn ${listening ? "live" : ""}`}
+          onClick={toggleListen}
+          title={listening ? "Stop dictation" : "Start dictation"}
+        >
+          {listening ? "⏹️" : "🎤"}
+        </button>
+      )}
+      {listening && <span className="mic-live-label">● Listening…</span>}
+    </div>
+  );
+}
+
 export default function ReportStudio({ supabaseKey }) {
   const [tab, setTab] = useState("new");
   const [cases, setCases] = useState([]);
@@ -312,8 +383,8 @@ ${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-s
 
             <div className="s-section">
               <h3 className="s-title">Measurements</h3>
-              <textarea className="s-ta" rows={6} value={report.measurements}
-                onChange={e=>setReport(r=>({...r,measurements:e.target.value}))}
+              <DictateTextarea rows={6} value={report.measurements}
+                onChange={v=>setReport(r=>({...r,measurements:v}))}
                 placeholder={"BPD: 72mm\nHC: 265mm\nAC: 230mm\nFL: 52mm\nEFW: 1450g\nFHR: 148 bpm\nAFI: 14cm\nPlacenta: posterior, grade 1"}/>
             </div>
           </div>
@@ -328,13 +399,13 @@ ${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-s
                 </button>
               </div>
               <div className="s-field"><label>Findings</label>
-                <textarea className="s-ta" rows={5} value={report.findings} onChange={e=>setReport(r=>({...r,findings:e.target.value}))} placeholder="Describe ultrasound findings…"/>
+                <DictateTextarea rows={5} value={report.findings} onChange={v=>setReport(r=>({...r,findings:v}))} placeholder="Describe ultrasound findings…"/>
               </div>
               <div className="s-field"><label>Comment</label>
-                <textarea className="s-ta" rows={3} value={report.comment} onChange={e=>setReport(r=>({...r,comment:e.target.value}))} placeholder="Additional comments…"/>
+                <DictateTextarea rows={3} value={report.comment} onChange={v=>setReport(r=>({...r,comment:v}))} placeholder="Additional comments…"/>
               </div>
               <div className="s-field"><label>Impression</label>
-                <textarea className="s-ta" rows={4} value={report.impression} onChange={e=>setReport(r=>({...r,impression:e.target.value}))} placeholder="• Normal fetal biometry for gestation&#10;• Adequate amniotic fluid&#10;• No structural anomalies identified"/>
+                <DictateTextarea rows={4} value={report.impression} onChange={v=>setReport(r=>({...r,impression:v}))} placeholder={"• Normal fetal biometry for gestation\n• Adequate amniotic fluid\n• No structural anomalies identified"}/>
               </div>
             </div>
 
