@@ -5,7 +5,7 @@ import { LOGO_DATA_URL } from "./brandAssets.js";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"
+const SUPABASE_ANON_KEY = ""; // ← paste your eyJ... key here
 
 async function sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -99,6 +99,12 @@ function Login({ onLogin }) {
 
 // ── SHELL ─────────────────────────────────────────────────────────────────────
 function Shell({ user, onLogout, page, setPage, children }) {
+  const [dark, setDark] = React.useState(() => localStorage.getItem('hd_theme') === 'dark');
+
+  React.useEffect(() => {
+    document.body.setAttribute('data-theme', dark ? 'dark' : 'light');
+    localStorage.setItem('hd_theme', dark ? 'dark' : 'light');
+  }, [dark]);
   const nav = [
     { id: "patients", label: "Patients", icon: "👤" },
     { id: "bookings", label: "Bookings", icon: "📅" },
@@ -125,6 +131,9 @@ function Shell({ user, onLogout, page, setPage, children }) {
           <span className="top-user-label">Working user</span>
           <span className="top-user-name">{user.name}</span>
           <span className="top-user-role">{user.role === "admin" ? "Admin" : "Reception"}</span>
+          <button className="theme-toggle-btn" onClick={() => setDark(d => !d)} title="Toggle dark/light mode">
+            {dark ? "☀️ Light" : "🌙 Dark"}
+          </button>
           <button className="top-logout-btn" onClick={onLogout}>Sign out</button>
         </div>
       </header>
@@ -162,6 +171,16 @@ function Patients() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function deletePatient(p) {
+    if (!window.confirm(`Delete patient: ${p.full_name}?\n\nThis cannot be undone.`)) return;
+    try {
+      await sbFetch(`patients?id=eq.${p.id}`, { method: "DELETE" });
+      setPatients(prev => prev.filter(x => x.id !== p.id));
+    } catch(e) {
+      alert("Delete failed: " + e.message);
+    }
+  }
+
   const filtered = patients.filter(p =>
     [p.full_name, p.id_number, p.phone, p.medical_aid]
       .join(" ").toLowerCase().includes(search.toLowerCase())
@@ -186,7 +205,7 @@ function Patients() {
           <thead>
             <tr>
               <th>Name</th><th>ID Number</th><th>Phone</th>
-              <th>Medical Aid</th><th>DOB</th>
+              <th>Medical Aid</th><th>DOB</th><th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -197,10 +216,13 @@ function Patients() {
                 <td>{p.phone || "—"}</td>
                 <td>{p.medical_aid || "Cash"}</td>
                 <td>{p.dob || "—"}</td>
+                <td>
+                  <button className="act-btn delete" onClick={() => deletePatient(p)} title="Delete patient">🗑️</button>
+                </td>
               </tr>
             ))}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan={5} className="empty">No patients found</td></tr>
+              <tr><td colSpan={6} className="empty">No patients found</td></tr>
             )}
           </tbody>
         </table>
