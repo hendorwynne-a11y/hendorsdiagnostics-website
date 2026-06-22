@@ -5,7 +5,7 @@ import { LOGO_DATA_URL } from "./brandAssets.js";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"
+const SUPABASE_ANON_KEY = ""; // ← paste your eyJ... key here
 
 async function sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -391,6 +391,14 @@ function Reports({ user }) {
     window.open(`mailto:?subject=${subject}&body=${body}`);
   }
 
+  async function deleteReport(r) {
+    if (!window.confirm(`Delete report for ${r.patient_name}?\n\nThis cannot be undone.`)) return;
+    try {
+      await sbFetch(`reports?id=eq.${r.id}`, { method: "DELETE" });
+      setReports(prev => prev.filter(x => x.id !== r.id));
+    } catch(e) { alert("Delete failed: " + e.message); }
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -422,10 +430,11 @@ function Reports({ user }) {
                 <td>{r.report_date || r.created_at?.slice(0,10) || "—"}</td>
                 <td><span className={`status status-${(r.status||"draft").toLowerCase()}`}>{r.status || "Draft"}</span></td>
                 <td className="actions-cell">
-                  <button className="act-btn whatsapp" onClick={() => sendWhatsAppPatient(r)} title="WhatsApp patient">💬 Patient</button>
-                  <button className="act-btn whatsapp" onClick={() => sendWhatsAppDoctor(r)} title="WhatsApp doctor">💬 Doctor</button>
-                  <button className="act-btn email" onClick={() => sendEmailPatient(r)} title="Email patient">✉️ Patient</button>
-                  <button className="act-btn email" onClick={() => sendEmailDoctor(r)} title="Email doctor">✉️ Doctor</button>
+                  <button className="act-btn whatsapp" onClick={() => sendWhatsAppPatient(r)} title="WhatsApp Patient">💬P</button>
+                  <button className="act-btn whatsapp" onClick={() => sendWhatsAppDoctor(r)} title="WhatsApp Doctor">💬D</button>
+                  <button className="act-btn email" onClick={() => sendEmailPatient(r)} title="Email Patient">✉️P</button>
+                  <button className="act-btn email" onClick={() => sendEmailDoctor(r)} title="Email Doctor">✉️D</button>
+                  <button className="act-btn delete" onClick={() => deleteReport(r)} title="Delete report">🗑️</button>
                 </td>
               </tr>
             ))}
