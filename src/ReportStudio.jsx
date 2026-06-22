@@ -359,7 +359,7 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
       }
       const row = {
         patient_name: report.patient_name,
-        patient_id: report.patient_id,
+        file_no: report.patient_id,
         dob: toISODate(report.dob),
         age: report.age,
         gender: report.gender,
