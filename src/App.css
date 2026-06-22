@@ -34,13 +34,9 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 .login-card button[type="submit"]:hover { background: #2d9cdb; }
 
 /* ── SHELL ────────────────────────────────────────────────────────────────── */
-.shell { display: flex; min-height: 100vh; }
+.shell { display: flex; flex-direction: column; min-height: 100vh; }
 
-.sidebar {
-  width: 220px; background: #0a1628; color: #fff;
-  display: flex; flex-direction: column; position: fixed;
-  top: 0; left: 0; bottom: 0; z-index: 100;
-}
+.sidebar { display: none; }
 .sidebar-brand {
   padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08);
   display: flex; align-items: center; gap: 10px;
@@ -76,7 +72,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; back
 }
 .logout-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
-.main-content { margin-left: 220px; flex: 1; padding: 32px; min-height: 100vh; }
+.main-content { display: none; }
 
 /* ── PAGE ─────────────────────────────────────────────────────────────────── */
 .page { max-width: 1100px; }
@@ -185,11 +181,13 @@ td strong { color: #0a1628; font-weight: 600; }
 
 /* ── RESPONSIVE ───────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .sidebar { width: 64px; }
-  .brand-name, .nav-item span:last-child, .user-info, .logout-btn { display: none; }
-  .sidebar-brand { padding: 16px 14px; justify-content: center; }
-  .nav-item { justify-content: center; padding: 12px; }
-  .main-content { margin-left: 64px; padding: 16px; }
+  .top-header { height: auto; padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
+  .top-logo-img { height: 40px; }
+  .top-title-main { font-size: 16px; }
+  .top-nav { overflow-x: auto; }
+  .top-nav-item { padding: 10px 10px; font-size: 11px; }
+  .top-nav-item span:last-child { display: none; }
+  .main-content-new { padding: 12px; }
 }
 
 /* ── CHANGE PASSWORD ──────────────────────────────────────────────────────── */
