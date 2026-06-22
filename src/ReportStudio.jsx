@@ -347,10 +347,20 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
     if (!report.patient_name) { setStatus({type:"error", msg:"Patient name required"}); return; }
     setSaving(true); setStatus(null);
     try {
+      // Convert DOB from DD-MM-YYYY or DD/MM/YYYY to YYYY-MM-DD for Supabase
+      function toISODate(d) {
+        if (!d) return null;
+        // Already YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+        // DD-MM-YYYY or DD/MM/YYYY
+        const m = d.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+        if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+        return null;
+      }
       const row = {
         patient_name: report.patient_name,
         patient_id: report.patient_id,
-        dob: report.dob || null,
+        dob: toISODate(report.dob),
         age: report.age,
         gender: report.gender,
         phone: report.phone,
