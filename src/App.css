@@ -348,3 +348,50 @@ td strong { color: #0a1628; font-weight: 600; }
 .gen-btn.ghost { background: #f4f8ff; color: #6b7a8d; border: 1.5px solid #dde3ec; }
 .gen-btn.ghost:hover { border-color: #e53935; color: #e53935; }
 .gen-btn.ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── TOP HEADER (desktop app style) ───────────────────────────────────────── */
+.top-header {
+  background: #fff; border-bottom: 1px solid #B7CDEB;
+  display: flex; align-items: center; gap: 0;
+  height: 90px; padding: 0 24px; position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 8px rgba(6,45,92,0.07);
+}
+.top-header-logo { display: flex; align-items: center; padding-right: 24px; border-right: 1px solid #dde8f8; }
+.top-logo-img { height: 60px; width: auto; object-fit: contain; }
+.top-header-title { display: flex; flex-direction: column; padding: 0 24px; flex: 1; }
+.top-title-main { font-size: 22px; font-weight: 900; color: #062D5C; font-family: 'Segoe UI', sans-serif; letter-spacing: 0.5px; }
+.top-title-sub { font-size: 13px; font-weight: 700; color: #566575; margin-top: 1px; }
+.top-title-tagline { font-size: 10px; color: #2d9cdb; margin-top: 2px; }
+.top-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; padding-left: 24px; border-left: 1px solid #dde8f8; }
+.top-user-label { font-size: 9px; color: #8fa3bc; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+.top-user-name { font-size: 14px; font-weight: 700; color: #062D5C; }
+.top-user-role { font-size: 10px; color: #2d9cdb; font-weight: 600; }
+.top-logout-btn { margin-top: 4px; padding: 5px 12px; background: #f4f8ff; border: 1px solid #B7CDEB; border-radius: 6px; font-size: 11px; color: #062D5C; cursor: pointer; transition: all .15s; }
+.top-logout-btn:hover { background: #062D5C; color: #fff; }
+
+/* ── TOP NAV BAR (navy tab bar like desktop app) ──────────────────────────── */
+.top-nav {
+  background: #062D5C; display: flex; align-items: center;
+  padding: 0 16px; gap: 2px; position: sticky; top: 90px; z-index: 99;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.top-nav-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 12px 16px; border: none; background: transparent;
+  color: #8fa3bc; font-size: 13px; font-weight: 600;
+  cursor: pointer; border-bottom: 3px solid transparent;
+  transition: all .15s; white-space: nowrap;
+}
+.top-nav-item:hover { color: #fff; background: rgba(255,255,255,0.06); }
+.top-nav-item.active { color: #fff; border-bottom-color: #2d9cdb; background: rgba(255,255,255,0.08); }
+.top-nav-item .nav-icon { font-size: 14px; }
+
+/* ── MAIN CONTENT (no sidebar offset) ────────────────────────────────────── */
+.main-content-new { padding: 28px 32px; min-height: calc(100vh - 138px); background: #f4f7fb; }
+
+/* ── REPORT ACTION BUTTONS with labels ───────────────────────────────────── */
+.act-btn { padding: 5px 10px; border-radius: 6px; border: 1.5px solid #dde3ec; background: #fff; cursor: pointer; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 3px; transition: all .15s; white-space: nowrap; }
+.act-btn.whatsapp { color: #2e7d32; border-color: #a5d6a7; }
+.act-btn.whatsapp:hover { background: #e8f5e9; }
+.act-btn.email { color: #1565c0; border-color: #90caf9; }
+.act-btn.email:hover { background: #e3f2fd; }

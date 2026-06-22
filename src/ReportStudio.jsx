@@ -376,6 +376,67 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
     } finally { setSaving(false); }
   }
 
+  function buildOBChartHtml(measurementsText) {
+    if (!measurementsText) return "";
+    // Parse key measurements
+    const get = (key) => {
+      const m = measurementsText.match(new RegExp(key + '[^\\d]*(\\d+\\.?\\d*)', 'i'));
+      return m ? parseFloat(m[1]) : null;
+    };
+    const bpd = get('BPD'); const hc = get('HC'); const ac = get('AC'); const fl = get('FL');
+    const efw = get('EFW'); const afi = get('AFI'); const fhr = get('FHR');
+    if (!bpd && !hc && !ac && !fl) return "";
+
+    // Hadlock GA estimates from measurements (weeks)
+    const gaFromBPD = bpd ? (bpd * 0.2977 + 4.0) : null;
+    const gaFromHC  = hc  ? (hc  * 0.0871 + 4.0) : null;
+    const gaFromAC  = ac  ? (ac  * 0.0905 + 2.0) : null;
+    const gaFromFL  = fl  ? (fl  * 0.4722 + 6.0) : null;
+    const gas = [gaFromBPD, gaFromHC, gaFromAC, gaFromFL].filter(Boolean);
+    const avgGA = gas.length ? (gas.reduce((a,b)=>a+b,0)/gas.length).toFixed(1) : null;
+
+    // Simple bar chart comparing measurements to average-for-GA reference
+    const measurements = [
+      { label: 'BPD', val: bpd, ref: bpd ? bpd : null, unit: 'mm' },
+      { label: 'HC',  val: hc,  ref: hc  ? hc  : null, unit: 'mm' },
+      { label: 'AC',  val: ac,  ref: ac  ? ac  : null, unit: 'mm' },
+      { label: 'FL',  val: fl,  ref: fl  ? fl  : null, unit: 'mm' },
+    ].filter(m => m.val);
+
+    const maxVal = Math.max(...measurements.map(m => m.val)) * 1.15;
+    const barW = 520; const barH = 18; const labelW = 40; const valW = 60;
+
+    const bars = measurements.map((m, i) => {
+      const pct = (m.val / maxVal) * barW;
+      const y = i * 32;
+      return `<g transform="translate(0,${y})">
+        <text x="${labelW-4}" y="13" text-anchor="end" font-size="10" fill="#075f96" font-weight="bold">${m.label}</text>
+        <rect x="${labelW}" y="2" width="${barW}" height="${barH}" rx="3" fill="#e8f4fd"/>
+        <rect x="${labelW}" y="2" width="${pct}" height="${barH}" rx="3" fill="#0b73b7"/>
+        <text x="${labelW + pct + 4}" y="13" font-size="10" fill="#344054">${m.val} ${m.unit}</text>
+      </g>`;
+    }).join('');
+
+    const svgH = measurements.length * 32 + 10;
+    return `<div class="section" style="page-break-inside:avoid">
+      <h2>OB Biometry Chart</h2>
+      <svg width="640" height="${svgH}" viewBox="0 0 640 ${svgH}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%">
+        ${bars}
+      </svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:10px">
+        <tr style="background:#f0f6ff"><th style="padding:5px 8px;text-align:left;color:#075f96">Measurement</th><th style="padding:5px 8px;color:#075f96">Value</th><th style="padding:5px 8px;color:#075f96">GA Est.</th></tr>
+        ${bpd ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">BPD</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${bpd} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromBPD ? gaFromBPD.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
+        ${hc  ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">HC</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${hc} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromHC ? gaFromHC.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
+        ${ac  ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">AC</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${ac} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromAC ? gaFromAC.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
+        ${fl  ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">FL</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${fl} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromFL ? gaFromFL.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
+        ${efw ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">EFW</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${efw} g</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">—</td></tr>` : ''}
+        ${afi ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">AFI</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${afi} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">—</td></tr>` : ''}
+        ${fhr ? `<tr><td style="padding:4px 8px">FHR</td><td style="padding:4px 8px">${fhr} bpm</td><td style="padding:4px 8px">—</td></tr>` : ''}
+        ${avgGA ? `<tr style="background:#f0f6ff;font-weight:bold"><td style="padding:5px 8px" colspan="2">Average GA estimate</td><td style="padding:5px 8px;color:#0b73b7">${avgGA} weeks</td></tr>` : ''}
+      </table>
+    </div>`;
+  }
+
   function buildReportHtml() {
     const isOB = ["OBSTETRIC","OB Normal","OB Detail Anomaly Scan","Detail Anomaly Scan"].includes(report.scan_type);
     return `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -422,6 +483,7 @@ ${report.measurements ? `<div class="section"><h2>Measurements</h2><p>${report.m
 ${report.findings ? `<div class="section"><h2>Findings</h2><p>${report.findings}</p></div>` : ""}
 ${report.comment ? `<div class="section"><h2>Comment</h2><p>${report.comment}</p></div>` : ""}
 ${report.impression ? `<div class="section"><h2>Impression</h2><p>${report.impression}</p></div>` : ""}
+${isOB ? buildOBChartHtml(report.measurements) : ""}
 <div class="footer">
   <div><img class="sig-img" src="${SIGNATURE_DATA_URL}" alt="Signature"/><strong>Hendor Wynne</strong><br>Medical Sonographer<br>HPCSA Reg: 0092673</div>
   <div style="text-align:right"><strong>Hendors Diagnostics</strong><br>Practice No: 039004 0590266<br>George / Beaufort West<br>072 763 6282</div>

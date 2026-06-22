@@ -5,7 +5,7 @@ import { LOGO_DATA_URL } from "./brandAssets.js";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"
+const SUPABASE_ANON_KEY = ""; // ← paste your eyJ... key here
 
 async function sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -111,32 +111,39 @@ function Shell({ user, onLogout, page, setPage, children }) {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
-          <img src={LOGO_DATA_URL} alt="Hendors Diagnostics" className="brand-logo-img" />
-          <span className="brand-name">FrontDesk</span>
+      {/* Top header — matches desktop app style */}
+      <header className="top-header">
+        <div className="top-header-logo">
+          <img src={LOGO_DATA_URL} alt="Hendors Diagnostics" className="top-logo-img" />
         </div>
-        <nav className="sidebar-nav">
-          {nav.filter(n => !n.adminOnly || user.role === "admin").map(n => (
-            <button
-              key={n.id}
-              className={`nav-item ${page === n.id ? "active" : ""}`}
-              onClick={() => setPage(n.id)}
-            >
-              <span className="nav-icon">{n.icon}</span>
-              <span>{n.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-user">
-          <div className="user-info">
-            <span className="user-name">{user.name}</span>
-            <span className="user-role">{user.role === "admin" ? "Admin" : "Reception"}</span>
-          </div>
-          <button className="logout-btn" onClick={onLogout}>Sign out</button>
+        <div className="top-header-title">
+          <span className="top-title-main">HD FRONTDESK</span>
+          <span className="top-title-sub">Patient Register</span>
+          <span className="top-title-tagline">Consistent HD1.0 reporting and workflow</span>
         </div>
-      </aside>
-      <main className="main-content">{children}</main>
+        <div className="top-header-right">
+          <span className="top-user-label">Working user</span>
+          <span className="top-user-name">{user.name}</span>
+          <span className="top-user-role">{user.role === "admin" ? "Admin" : "Reception"}</span>
+          <button className="top-logout-btn" onClick={onLogout}>Sign out</button>
+        </div>
+      </header>
+
+      {/* Nav bar — matches desktop app navy bar */}
+      <nav className="top-nav">
+        {nav.filter(n => !n.adminOnly || user.role === "admin").map(n => (
+          <button
+            key={n.id}
+            className={`top-nav-item ${page === n.id ? "active" : ""}`}
+            onClick={() => setPage(n.id)}
+          >
+            <span className="nav-icon">{n.icon}</span>
+            <span>{n.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <main className="main-content-new">{children}</main>
     </div>
   );
 }
@@ -338,19 +345,28 @@ function Reports({ user }) {
       .join(" ").toLowerCase().includes(search.toLowerCase())
   );
 
-  function sendWhatsApp(r) {
-    const msg = encodeURIComponent(
-      `Hendors Diagnostics\n\nReport ready for: ${r.patient_name}\nStudy: ${r.study_type || ""}\nDate: ${r.report_date || r.created_at?.slice(0,10) || ""}\n\nPlease collect or arrange delivery.`
-    );
-    window.open(`https://wa.me/27${(r.patient_phone||"").replace(/^0/,"")}?text=${msg}`, "_blank");
+  function sendWhatsAppPatient(r) {
+    const phone = (r.phone || r.patient_phone || "").replace(/\D/g, "").replace(/^0/, "27");
+    if (!phone) { alert("No patient phone number on this report."); return; }
+    const msg = encodeURIComponent(`Hendors Diagnostics\n\nDear ${r.patient_name},\n\nYour ultrasound report is ready.\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nPlease contact us to collect or arrange delivery.\n\nHendors Diagnostics\n072 763 6282`);
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
   }
 
-  function sendEmail(r) {
-    const subject = encodeURIComponent(`Hendors Diagnostics — Report for ${r.patient_name}`);
-    const body = encodeURIComponent(
-      `Dear ${r.patient_name},\n\nYour report from Hendors Diagnostics is ready.\nStudy: ${r.study_type || ""}\nDate: ${r.report_date || r.created_at?.slice(0,10) || ""}\n\nPlease contact us to collect your report.\n\nHendors Diagnostics\n072 763 6282`
-    );
-    window.open(`mailto:${r.patient_email||""}?subject=${subject}&body=${body}`);
+  function sendWhatsAppDoctor(r) {
+    const msg = encodeURIComponent(`Hendors Diagnostics\n\nDear ${r.referring_doctor||"Doctor"},\n\nReport completed for your patient: ${r.patient_name}\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nPlease contact us if you require a copy.\n\nHendor Wynne\nMedical Sonographer\n072 763 6282`);
+    window.open(`https://wa.me/?text=${msg}`, "_blank");
+  }
+
+  function sendEmailPatient(r) {
+    const subject = encodeURIComponent(`Hendors Diagnostics — Ultrasound Report for ${r.patient_name}`);
+    const body = encodeURIComponent(`Dear ${r.patient_name},\n\nYour ultrasound report is ready.\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nPlease contact us to collect your report.\n\nHendors Diagnostics\n072 763 6282\nreception.hendors@gmail.com`);
+    window.open(`mailto:${r.email||r.patient_email||""}?subject=${subject}&body=${body}`);
+  }
+
+  function sendEmailDoctor(r) {
+    const subject = encodeURIComponent(`Report: ${r.patient_name} — ${r.study_type||r.scan_type||""}`);
+    const body = encodeURIComponent(`Dear ${r.referring_doctor||"Doctor"},\n\nReport completed for your patient:\n\nPatient: ${r.patient_name}\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nKind regards,\nHendor Wynne\nMedical Sonographer\nHendors Diagnostics\n072 763 6282`);
+    window.open(`mailto:?subject=${subject}&body=${body}`);
   }
 
   return (
@@ -384,11 +400,10 @@ function Reports({ user }) {
                 <td>{r.report_date || r.created_at?.slice(0,10) || "—"}</td>
                 <td><span className={`status status-${(r.status||"draft").toLowerCase()}`}>{r.status || "Draft"}</span></td>
                 <td className="actions-cell">
-                  <button className="act-btn whatsapp" onClick={() => sendWhatsApp(r)} title="WhatsApp">💬</button>
-                  <button className="act-btn email" onClick={() => sendEmail(r)} title="Email">✉️</button>
-                  {r.pdf_url && (
-                    <a className="act-btn print" href={r.pdf_url} target="_blank" rel="noreferrer" title="Print/View PDF">🖨️</a>
-                  )}
+                  <button className="act-btn whatsapp" onClick={() => sendWhatsAppPatient(r)} title="WhatsApp patient">💬 Patient</button>
+                  <button className="act-btn whatsapp" onClick={() => sendWhatsAppDoctor(r)} title="WhatsApp doctor">💬 Doctor</button>
+                  <button className="act-btn email" onClick={() => sendEmailPatient(r)} title="Email patient">✉️ Patient</button>
+                  <button className="act-btn email" onClick={() => sendEmailDoctor(r)} title="Email doctor">✉️ Doctor</button>
                 </td>
               </tr>
             ))}
