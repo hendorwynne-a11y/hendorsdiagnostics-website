@@ -298,6 +298,162 @@ export default function ReportStudio({ supabaseKey }) {
     } finally { setExtracting(false); }
   }
 
+  function downloadPDF() {
+    // Open report in new window with auto-print to PDF
+    const html = buildReportHtml().replace(
+      '</style>',
+      `@media print { body { margin: 0; } }
+       </style>
+       <script>window.onload = function() { window.print(); }<\/script>`
+    );
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  function downloadWord() {
+    // Build a simple RTF-based Word document (no external library needed)
+    const name = report.patient_name || "Patient";
+    const safe = (s) => (s||"").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    const html = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8">
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #10233f; margin: 2cm; }
+  h1 { color: #062D5C; font-size: 18pt; border-bottom: 2pt solid #0b73b7; padding-bottom: 6pt; }
+  h2 { color: #075f96; font-size: 12pt; border-bottom: 1pt solid #d6e4ef; margin-top: 14pt; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
+  td, th { border: 1pt solid #d6e4ef; padding: 5pt 8pt; font-size: 10pt; }
+  th { background: #e8f4fd; color: #075f96; font-weight: bold; }
+  .section { border: 1pt solid #d6e4ef; padding: 10pt; margin-bottom: 10pt; }
+  .footer { border-top: 2pt solid #0b73b7; margin-top: 20pt; padding-top: 8pt; font-size: 9pt; color: #31495f; }
+  img.sig { height: 40pt; }
+</style></head>
+<body>
+<h1>HENDORS DIAGNOSTICS</h1>
+<p style="color:#526575;font-size:9pt;text-transform:uppercase">${safe(report.scan_type)} Report &nbsp;|&nbsp; Date: ${safe(report.exam_date)} &nbsp;|&nbsp; Practice No: 039004 0590266</p>
+
+<table>
+  <tr><th colspan="2">Patient</th><th colspan="2">Examination</th><th colspan="2">Clinician</th></tr>
+  <tr>
+    <td><b>Name</b></td><td>${safe(report.patient_name)}</td>
+    <td><b>Date</b></td><td>${safe(report.exam_date)}</td>
+    <td><b>Referred by</b></td><td>${safe(report.referring_doctor)||"—"}</td>
+  </tr>
+  <tr>
+    <td><b>File No</b></td><td>${safe(report.patient_id)||"—"}</td>
+    <td><b>Type</b></td><td>${safe(report.scan_type)}</td>
+    <td><b>Performed by</b></td><td>${safe(report.performed_by)}</td>
+  </tr>
+  <tr>
+    <td><b>DOB</b></td><td>${safe(report.dob)||"—"}</td>
+    <td><b>Study</b></td><td>${safe(report.study_title)||safe(report.scan_type)}</td>
+    <td><b>Medical Aid</b></td><td>${safe(report.medical_aid)||"Cash"}</td>
+  </tr>
+  <tr>
+    <td><b>Age/Sex</b></td><td>${safe(report.age)||"—"} / ${safe(report.gender)||"—"}</td>
+    <td></td><td></td><td></td><td></td>
+  </tr>
+</table>
+
+${report.measurements ? `<h2>Measurements</h2><div class="section"><pre style="font-family:Arial;font-size:10pt;margin:0">${safe(report.measurements)}</pre></div>` : ""}
+${report.findings ? `<h2>Findings</h2><div class="section">${safe(report.findings).replace(/\n/g,'<br>')}</div>` : ""}
+${report.comment ? `<h2>Comment</h2><div class="section">${safe(report.comment).replace(/\n/g,'<br>')}</div>` : ""}
+${report.impression ? `<h2>Impression</h2><div class="section">${safe(report.impression).replace(/\n/g,'<br>')}</div>` : ""}
+
+<div class="footer">
+  <table style="border:none"><tr>
+    <td style="border:none;width:50%">
+      <img class="sig" src="${SIGNATURE_DATA_URL}" alt="Signature"/><br>
+      <b>Hendor Wynne</b><br>
+      Medical Sonographer<br>
+      HPCSA Reg: 0092673
+    </td>
+    <td style="border:none;width:50%;text-align:right">
+      <b>Hendors Diagnostics</b><br>
+      Practice No: 039004 0590266<br>
+      George / Beaufort West<br>
+      072 763 6282
+    </td>
+  </tr></table>
+</div>
+</body></html>`;
+
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name.replace(/\s+/g,'_')}_Report_${report.exam_date||'draft'}.doc`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  function sendWA(target) {
+    const name = report.patient_name || "Patient";
+    const study = report.study_title || report.scan_type || "";
+    const date = report.exam_date || "";
+    const doctor = report.referring_doctor || "Doctor";
+    let phone = "";
+    let msg = "";
+    if (target === "patient") {
+      phone = (report.phone || "").replace(/\D/g,"").replace(/^0/,"27");
+      msg = encodeURIComponent(
+        `Hendors Diagnostics\n\nDear ${name},\n\nYour ultrasound report is ready.\nStudy: ${study}\nDate: ${date}\n\nPlease contact us to collect your report or arrange delivery.\n\nHendors Diagnostics\n📞 072 763 6282\n✉️ reception.hendors@gmail.com`
+      );
+    } else {
+      phone = "";
+      msg = encodeURIComponent(
+        `Hendors Diagnostics\n\nDear ${doctor},\n\nReport completed for your patient: ${name}\nStudy: ${study}\nDate: ${date}\n\nPlease contact us if you require a copy.\n\nHendor Wynne\nMedical Sonographer\n📞 072 763 6282`
+      );
+    }
+    const url = phone
+      ? `https://wa.me/${phone}?text=${msg}`
+      : `https://wa.me/?text=${msg}`;
+    window.open(url, "_blank");
+  }
+
+  function sendEmail(target) {
+    const name = report.patient_name || "Patient";
+    const study = report.study_title || report.scan_type || "";
+    const date = report.exam_date || "";
+    const doctor = report.referring_doctor || "Doctor";
+    let to = "";
+    let subject = "";
+    let body = "";
+    if (target === "patient") {
+      to = report.email || "";
+      subject = encodeURIComponent(`Hendors Diagnostics — Ultrasound Report for ${name}`);
+      body = encodeURIComponent(
+        `Dear ${name},\n\nYour ultrasound report is ready.\nStudy: ${study}\nDate: ${date}\n\nPlease contact us to collect your report or arrange delivery.\n\nHendors Diagnostics\nTel: 072 763 6282\nEmail: reception.hendors@gmail.com`
+      );
+    } else {
+      to = "";
+      subject = encodeURIComponent(`Report: ${name} — ${study}`);
+      body = encodeURIComponent(
+        `Dear ${doctor},\n\nReport completed for your patient:\n\nPatient: ${name}\nStudy: ${study}\nDate: ${date}\n\nKind regards,\nHendor Wynne\nMedical Sonographer\nHendors Diagnostics\nTel: 072 763 6282`
+      );
+    }
+    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+  }
+
+  async function deleteReport() {
+    if (!report.id) return;
+    if (!window.confirm(`Delete report for ${report.patient_name}? This cannot be undone.`)) return;
+    try {
+      await sbFetch(`reports?id=eq.${report.id}`, { method: "DELETE" }, supabaseKey);
+      setReport(defaultReport());
+      setPatientSearch("");
+      setStatus({ type: "success", msg: "Report deleted." });
+      loadCases();
+    } catch(e) {
+      setStatus({ type: "error", msg: "Delete failed: " + e.message });
+    }
+  }
+
   async function generateReport() {
     if (!report.patient_name) { setStatus({type:"error", msg:"Enter patient name first"}); return; }
     setGenerating(true); setStatus(null);
@@ -379,7 +535,8 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
         status: report.status,
         created_at: new Date().toISOString(),
       };
-      await sbFetch("reports", { method:"POST", body: JSON.stringify(row) }, supabaseKey);
+      const saved = await sbFetch("reports", { method:"POST", body: JSON.stringify(row) }, supabaseKey);
+      if (saved && saved[0]) setReport(r => ({...r, id: saved[0].id}));
       setStatus({type:"success", msg:"Report saved to cloud ✓"});
     } catch(e) {
       setStatus({type:"error", msg:"Save failed: " + e.message});
@@ -711,7 +868,17 @@ ${isOB ? buildOBChartHtml(report.measurements) : ""}
               <button className="act-s save" onClick={saveReport} disabled={saving}>{saving?"Saving…":"💾 Save to Cloud"}</button>
               <button className="act-s preview" onClick={()=>setShowPdfPreview(true)}>👁️ Preview</button>
               <button className="act-s print" onClick={printReport}>🖨️ Print / PDF</button>
+              <button className="act-s pdf-dl" onClick={downloadPDF}>📄 Download PDF</button>
+              <button className="act-s word-dl" onClick={downloadWord}>📝 Download Word</button>
+            </div>
+
+            <div className="s-actions" style={{marginTop:"10px"}}>
+              <button className="act-s wa-patient" onClick={()=>sendWA("patient")}>💬 WhatsApp Patient</button>
+              <button className="act-s wa-doctor" onClick={()=>sendWA("doctor")}>💬 WhatsApp Doctor</button>
+              <button className="act-s email-patient" onClick={()=>sendEmail("patient")}>✉️ Email Patient</button>
+              <button className="act-s email-doctor" onClick={()=>sendEmail("doctor")}>✉️ Email Doctor</button>
               <button className="act-s new" onClick={()=>{setReport(defaultReport());setPatientSearch("");setStatus(null);}}>➕ New</button>
+              {report.id && <button className="act-s del" onClick={deleteReport}>🗑️ Delete</button>}
             </div>
           </div>
         </div>
