@@ -378,62 +378,107 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
 
   function buildOBChartHtml(measurementsText) {
     if (!measurementsText) return "";
-    // Parse key measurements
     const get = (key) => {
       const m = measurementsText.match(new RegExp(key + '[^\\d]*(\\d+\\.?\\d*)', 'i'));
       return m ? parseFloat(m[1]) : null;
     };
-    const bpd = get('BPD'); const hc = get('HC'); const ac = get('AC'); const fl = get('FL');
-    const efw = get('EFW'); const afi = get('AFI'); const fhr = get('FHR');
+    const bpd = get('BPD'), hc = get('HC'), ac = get('AC'), fl = get('FL');
+    const efw = get('EFW'), umbRI = get('Umb RI') || get('RI'), umbPI = get('Umb PI') || get('PI');
     if (!bpd && !hc && !ac && !fl) return "";
 
-    // Hadlock GA estimates from measurements (weeks)
-    const gaFromBPD = bpd ? (bpd * 0.2977 + 4.0) : null;
-    const gaFromHC  = hc  ? (hc  * 0.0871 + 4.0) : null;
-    const gaFromAC  = ac  ? (ac  * 0.0905 + 2.0) : null;
-    const gaFromFL  = fl  ? (fl  * 0.4722 + 6.0) : null;
-    const gas = [gaFromBPD, gaFromHC, gaFromAC, gaFromFL].filter(Boolean);
-    const avgGA = gas.length ? (gas.reduce((a,b)=>a+b,0)/gas.length).toFixed(1) : null;
+    // GA estimate from BPD (Hadlock)
+    const gaFromBPD = bpd ? bpd * 0.2977 + 4.0 : null;
+    const gaFromHC  = hc  ? hc  * 0.0871 + 4.0 : null;
+    const gaFromAC  = ac  ? ac  * 0.0905 + 2.0 : null;
+    const gaFromFL  = fl  ? fl  * 0.4722 + 6.0 : null;
+    const gas = [gaFromBPD,gaFromHC,gaFromAC,gaFromFL].filter(Boolean);
+    const ga = gas.length ? gas.reduce((a,b)=>a+b,0)/gas.length : null;
 
-    // Simple bar chart comparing measurements to average-for-GA reference
-    const measurements = [
-      { label: 'BPD', val: bpd, ref: bpd ? bpd : null, unit: 'mm' },
-      { label: 'HC',  val: hc,  ref: hc  ? hc  : null, unit: 'mm' },
-      { label: 'AC',  val: ac,  ref: ac  ? ac  : null, unit: 'mm' },
-      { label: 'FL',  val: fl,  ref: fl  ? fl  : null, unit: 'mm' },
-    ].filter(m => m.val);
+    // Centile reference data (from desktop obs_graphs.py)
+    const CHARTS = {
+      BPD:    { title:'BPD', unit:'mm', ymin:15, ymax:105, weeks:[14,18,22,26,30,34,38,40], p50:[[14,27],[18,42],[22,55],[26,68],[30,78],[34,86],[38,94],[40,97]], spread:5, val:bpd, ga:ga },
+      HC:     { title:'HC',  unit:'mm', ymin:80, ymax:360, weeks:[14,18,22,26,30,34,38,40], p50:[[14,100],[18,150],[22,200],[26,240],[30,280],[34,310],[38,335],[40,345]], spread:18, val:hc, ga:ga },
+      AC:     { title:'AC',  unit:'mm', ymin:70, ymax:380, weeks:[14,18,22,26,30,34,38,40], p50:[[14,85],[18,130],[22,180],[26,225],[30,270],[34,310],[38,345],[40,360]], spread:22, val:ac, ga:ga },
+      FL:     { title:'FL',  unit:'mm', ymin:5,  ymax:85,  weeks:[14,18,22,26,30,34,38,40], p50:[[14,15],[18,28],[22,39],[26,49],[30,59],[34,67],[38,75],[40,78]], spread:4, val:fl, ga:ga },
+      EFW:    { title:'Estimated Fetal Weight (EFW)', unit:'g', ymin:100, ymax:4500, weeks:[18,22,26,30,34,38,40], p50:[[18,230],[22,500],[26,900],[30,1500],[34,2300],[38,3200],[40,3600]], spread:350, val:efw, ga:ga },
+      UmbRI:  { title:'Umbilical Artery RI', unit:'', ymin:0.35, ymax:1.0, weeks:[18,22,26,30,34,38,40], p50:[[18,0.78],[22,0.72],[26,0.66],[30,0.61],[34,0.57],[38,0.53],[40,0.51]], spread:0.08, val:umbRI, ga:ga },
+    };
 
-    const maxVal = Math.max(...measurements.map(m => m.val)) * 1.15;
-    const barW = 520; const barH = 18; const labelW = 40; const valW = 60;
+    function interp(pts, x) {
+      const sorted = [...pts].sort((a,b)=>a[0]-b[0]);
+      if (x <= sorted[0][0]) return sorted[0][1];
+      if (x >= sorted[sorted.length-1][0]) return sorted[sorted.length-1][1];
+      for (let i=0; i<sorted.length-1; i++) {
+        const [x0,y0]=sorted[i], [x1,y1]=sorted[i+1];
+        if (x0<=x && x<=x1) return y0 + (y1-y0)*(x-x0)/(x1-x0);
+      }
+      return sorted[sorted.length-1][1];
+    }
 
-    const bars = measurements.map((m, i) => {
-      const pct = (m.val / maxVal) * barW;
-      const y = i * 32;
-      return `<g transform="translate(0,${y})">
-        <text x="${labelW-4}" y="13" text-anchor="end" font-size="10" fill="#075f96" font-weight="bold">${m.label}</text>
-        <rect x="${labelW}" y="2" width="${barW}" height="${barH}" rx="3" fill="#e8f4fd"/>
-        <rect x="${labelW}" y="2" width="${pct}" height="${barH}" rx="3" fill="#0b73b7"/>
-        <text x="${labelW + pct + 4}" y="13" font-size="10" fill="#344054">${m.val} ${m.unit}</text>
-      </g>`;
-    }).join('');
+    function makeChart(key) {
+      const s = CHARTS[key];
+      if (!s.val) return '';
+      const W=260, H=160, PL=8, PR=30, PT=22, PB=28;
+      const pw=W-PL-PR, ph=H-PT-PB;
+      const minW=s.weeks[0], maxW=s.weeks[s.weeks.length-1];
+      const xm=(g)=>PL+pw*(g-minW)/(maxW-minW);
+      const ym=(v)=>PT+ph*(1-(v-s.ymin)/(s.ymax-s.ymin));
 
-    const svgH = measurements.length * 32 + 10;
+      // Build smooth curve points for p10/p50/p90
+      const steps=40;
+      function curve(offset) {
+        return Array.from({length:steps+1},(_,i)=>{
+          const g=minW+(maxW-minW)*i/steps;
+          const v=Math.max(s.ymin,Math.min(s.ymax,interp(s.p50,g)+offset));
+          return `${xm(g).toFixed(1)},${ym(v).toFixed(1)}`;
+        }).join(' ');
+      }
+
+      const gax = s.ga ? xm(s.ga) : null;
+      const gay = s.val ? ym(Math.max(s.ymin,Math.min(s.ymax,s.val))) : null;
+      const gaLabel = s.ga ? `Patient: ${s.val} ${s.unit} at ${s.ga.toFixed(1)}w` : '';
+
+      // Grid lines
+      const gridLines = s.weeks.map(w=>`
+        <line x1="${xm(w).toFixed(1)}" y1="${PT}" x2="${xm(w).toFixed(1)}" y2="${PT+ph}" stroke="#edf2f7" stroke-width="0.6"/>
+        <text x="${xm(w).toFixed(1)}" y="${PT+ph+10}" text-anchor="middle" font-size="7" fill="#566575">${w}</text>
+      `).join('');
+      const hGridLines = [0.25,0.5,0.75].map(f=>`
+        <line x1="${PL}" y1="${(PT+ph*f).toFixed(1)}" x2="${PL+pw}" y2="${(PT+ph*f).toFixed(1)}" stroke="#edf2f7" stroke-width="0.6"/>
+      `).join('');
+
+      // Centile labels
+      const labelX = PL+pw+3;
+      const p90y = ym(interp(s.p50,maxW)+s.spread*1.28);
+      const p50y = ym(interp(s.p50,maxW));
+      const p10y = ym(interp(s.p50,maxW)-s.spread*1.28);
+
+      return `
+        <div style="border:1px solid #d6e4ef;border-radius:8px;padding:8px;background:#fff;display:inline-block;width:260px;vertical-align:top;margin:4px">
+          <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+            <text x="4" y="14" font-size="9" font-weight="bold" fill="#071a3d">${s.title}</text>
+            <rect x="${PL}" y="${PT}" width="${pw}" height="${ph}" fill="white" stroke="#d8e3ef" stroke-width="0.8"/>
+            ${gridLines}${hGridLines}
+            <polyline points="${curve(s.spread*1.28)}" fill="none" stroke="#f87171" stroke-width="1.2" stroke-dasharray="3,2"/>
+            <polyline points="${curve(0)}" fill="none" stroke="#3b82f6" stroke-width="1.6"/>
+            <polyline points="${curve(-s.spread*1.28)}" fill="none" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3,2"/>
+            <text x="${labelX}" y="${p90y.toFixed(0)}" font-size="6" fill="#f87171">90th</text>
+            <text x="${labelX}" y="${p50y.toFixed(0)}" font-size="6" fill="#3b82f6">50th</text>
+            <text x="${labelX}" y="${p10y.toFixed(0)}" font-size="6" fill="#f59e0b">10th</text>
+            ${gax !== null && gay !== null ? `<circle cx="${gax.toFixed(1)}" cy="${gay.toFixed(1)}" r="4" fill="#111" stroke="white" stroke-width="1"/>` : ''}
+            <text x="${PL+pw/2}" y="${H-4}" text-anchor="middle" font-size="7" fill="#566575">Gestational age (weeks)</text>
+            <text x="4" y="${H-4}" font-size="7" fill="#344054">${gaLabel}</text>
+          </svg>
+        </div>`;
+    }
+
+    const charts = ['BPD','HC','AC','FL','EFW','UmbRI'].map(makeChart).filter(Boolean).join('');
+    if (!charts) return '';
+
     return `<div class="section" style="page-break-inside:avoid">
-      <h2>OB Biometry Chart</h2>
-      <svg width="640" height="${svgH}" viewBox="0 0 640 ${svgH}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%">
-        ${bars}
-      </svg>
-      <table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:10px">
-        <tr style="background:#f0f6ff"><th style="padding:5px 8px;text-align:left;color:#075f96">Measurement</th><th style="padding:5px 8px;color:#075f96">Value</th><th style="padding:5px 8px;color:#075f96">GA Est.</th></tr>
-        ${bpd ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">BPD</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${bpd} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromBPD ? gaFromBPD.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
-        ${hc  ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">HC</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${hc} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromHC ? gaFromHC.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
-        ${ac  ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">AC</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${ac} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromAC ? gaFromAC.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
-        ${fl  ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">FL</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${fl} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${gaFromFL ? gaFromFL.toFixed(1)+' wks' : '—'}</td></tr>` : ''}
-        ${efw ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">EFW</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${efw} g</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">—</td></tr>` : ''}
-        ${afi ? `<tr><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">AFI</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">${afi} mm</td><td style="padding:4px 8px;border-bottom:1px solid #e8f0f8">—</td></tr>` : ''}
-        ${fhr ? `<tr><td style="padding:4px 8px">FHR</td><td style="padding:4px 8px">${fhr} bpm</td><td style="padding:4px 8px">—</td></tr>` : ''}
-        ${avgGA ? `<tr style="background:#f0f6ff;font-weight:bold"><td style="padding:5px 8px" colspan="2">Average GA estimate</td><td style="padding:5px 8px;color:#0b73b7">${avgGA} weeks</td></tr>` : ''}
-      </table>
+      <h2>OBS Growth + Doppler Charts</h2>
+      <p style="font-size:9px;color:#526575;margin-bottom:10px">Guide chart with gestational-week axis. Formal validated centile dataset integration planned in next phase.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${charts}</div>
     </div>`;
   }
 
