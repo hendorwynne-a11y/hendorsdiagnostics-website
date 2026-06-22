@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { LOGO_DATA_URL, SIGNATURE_DATA_URL } from "./brandAssets.js";
 
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
 // ← This key is set from the parent App.jsx via props
@@ -10,9 +11,10 @@ const SCAN_TYPES = [
   "DVT / VASCULAR","CAROTID DOPPLER","MSK","SOFT TISSUE / HERNIA","OTHER"
 ];
 
-const DOCTORS = [
+// Default doctors - editable via Manage Doctors panel, persisted in Supabase 'doctors' table
+const DEFAULT_DOCTORS = [
   "Dr Kritzinger","Dr Van der Merwe","Dr Joubert","Dr Smith","Dr Botha",
-  "Dr Nel","Dr Pretorius","Dr Du Plessis","Dr Venter","Other"
+  "Dr Nel","Dr Pretorius","Dr Du Plessis","Dr Venter"
 ];
 
 async function sbFetch(path, opts={}, key) {
@@ -132,7 +134,7 @@ export default function ReportStudio({ supabaseKey }) {
       exam_date: new Date().toISOString().slice(0,10),
       scan_type: "OBSTETRIC", study_title: "",
       referring_doctor: "", performed_by: "Hendor Wynne",
-      measurements: "", findings: "", comment: "", impression: "",
+      measurements: "", findings: "", comment: "", impression: "", transcript: "",
       status: "Draft",
     };
   }
@@ -174,6 +176,43 @@ export default function ReportStudio({ supabaseKey }) {
   const [extracting, setExtracting] = useState(false);
   const fileInputRef = useRef(null);
   const pasteZoneRef = useRef(null);
+  const [doctors, setDoctors] = useState(DEFAULT_DOCTORS);
+  const [showDoctorMgr, setShowDoctorMgr] = useState(false);
+  const [newDoctorName, setNewDoctorName] = useState("");
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+
+  useEffect(() => { loadDoctors(); }, []);
+
+  async function loadDoctors() {
+    try {
+      const rows = await sbFetch("doctors?select=*&order=name", {}, supabaseKey);
+      if (rows.length > 0) setDoctors(rows.map(d => d.name));
+    } catch(e) {
+      // table may not exist yet - fall back to defaults silently
+    }
+  }
+
+  async function addDoctor() {
+    const name = newDoctorName.trim();
+    if (!name) return;
+    if (doctors.includes(name)) { setNewDoctorName(""); return; }
+    try {
+      await sbFetch("doctors", { method: "POST", body: JSON.stringify({ name }) }, supabaseKey);
+      setDoctors(prev => [...prev, name].sort());
+      setNewDoctorName("");
+    } catch(e) {
+      setDoctors(prev => [...prev, name].sort());
+      setNewDoctorName("");
+    }
+  }
+
+  async function removeDoctor(name) {
+    try {
+      await sbFetch(`doctors?name=eq.${encodeURIComponent(name)}`, { method: "DELETE" }, supabaseKey);
+    } catch(e) {}
+    setDoctors(prev => prev.filter(d => d !== name));
+    if (report.referring_doctor === name) setReport(r => ({...r, referring_doctor: ""}));
+  }
 
   function handlePaste(e) {
     const items = e.clipboardData?.items;
@@ -276,6 +315,8 @@ Date: ${report.exam_date}
 Measurements / Findings provided:
 ${report.measurements || "Not provided"}
 
+${report.transcript ? `Dictated notes from sonographer:\n${report.transcript}` : ""}
+
 ${report.findings ? `Additional findings: ${report.findings}` : ""}
 
 Write a professional ${isOB ? "obstetric " : ""}ultrasound report in Hendors Diagnostics HD style.
@@ -324,6 +365,7 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
         findings: report.findings,
         comment: report.comment,
         impression: report.impression,
+        transcript: report.transcript,
         status: report.status,
         created_at: new Date().toISOString(),
       };
@@ -334,15 +376,15 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
     } finally { setSaving(false); }
   }
 
-  function printReport() {
+  function buildReportHtml() {
     const isOB = ["OBSTETRIC","OB Normal","OB Detail Anomaly Scan","Detail Anomaly Scan"].includes(report.scan_type);
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
   @page{size:A4;margin:15mm}
-  body{font-family:Arial,sans-serif;color:#10233f;font-size:11px}
-  .header{border-bottom:3px solid #0b73b7;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end}
-  h1{color:#062D5C;margin:0;font-size:22px}
-  .sub{color:#526575;font-size:10px;text-transform:uppercase;letter-spacing:1px}
+  body{font-family:Arial,sans-serif;color:#10233f;font-size:11px;margin:0;background:#fff}
+  .header{border-bottom:3px solid #0b73b7;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+  .logo-img{height:48px;object-fit:contain}
+  .sub{color:#526575;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:4px}
   .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
   .card{border:1px solid #d6e4ef;border-radius:8px;padding:10px}
   .card h2{margin:0 0 6px;color:#075f96;font-size:11px;text-transform:uppercase}
@@ -350,17 +392,17 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
   .label{color:#075f96;font-weight:bold;display:inline-block;min-width:80px}
   .section{border:1px solid #d6e4ef;border-radius:8px;padding:12px;margin-bottom:10px}
   .section h2{margin:0 0 8px;color:#075f96;font-size:12px;text-transform:uppercase;border-bottom:1px solid #e8f0f8;padding-bottom:4px}
-  .section p{margin:4px 0;line-height:1.6}
-  .footer{display:flex;justify-content:space-between;border-top:2px solid #0b73b7;padding-top:10px;font-size:10px;color:#31495f;margin-top:16px}
-  .sig{font-family:'Brush Script MT',cursive;font-size:28px;color:#111}
+  .section p{margin:4px 0;line-height:1.6;white-space:pre-wrap}
+  .footer{display:flex;justify-content:space-between;align-items:flex-end;border-top:2px solid #0b73b7;padding-top:10px;font-size:10px;color:#31495f;margin-top:16px}
+  .sig-img{height:46px;object-fit:contain;display:block;margin-bottom:2px}
 </style></head><body>
 <div class="header">
-  <div><h1>HENDORS DIAGNOSTICS</h1><div class="sub">${isOB ? "Obstetric Ultrasound Report" : "Medical Ultrasound Report"}</div></div>
+  <div><img class="logo-img" src="${LOGO_DATA_URL}" alt="Hendors Diagnostics"/><div class="sub">${isOB ? "Obstetric Ultrasound Report" : "Medical Ultrasound Report"}</div></div>
   <div style="text-align:right;font-size:10px;color:#526575">Date: ${report.exam_date}<br>Practice No: 039004 0590266</div>
 </div>
 <div class="grid">
   <div class="card"><h2>Patient</h2>
-    <div class="row"><span class="label">Name:</span>${report.patient_name}</div>
+    <div class="row"><span class="label">Name:</span>${report.patient_name||"—"}</div>
     <div class="row"><span class="label">ID/File:</span>${report.patient_id || "—"}</div>
     <div class="row"><span class="label">DOB:</span>${report.dob || "—"}</div>
     <div class="row"><span class="label">Age/Sex:</span>${report.age || "—"} / ${report.gender || "—"}</div>
@@ -376,15 +418,19 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
     <div class="row"><span class="label">Medical aid:</span>${report.medical_aid || "Cash"}</div>
   </div>
 </div>
-${report.measurements ? `<div class="section"><h2>Measurements</h2><p style="white-space:pre-wrap">${report.measurements}</p></div>` : ""}
-${report.findings ? `<div class="section"><h2>Findings</h2><p style="white-space:pre-wrap">${report.findings}</p></div>` : ""}
-${report.comment ? `<div class="section"><h2>Comment</h2><p style="white-space:pre-wrap">${report.comment}</p></div>` : ""}
-${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-space:pre-wrap">${report.impression}</p></div>` : ""}
+${report.measurements ? `<div class="section"><h2>Measurements</h2><p>${report.measurements}</p></div>` : ""}
+${report.findings ? `<div class="section"><h2>Findings</h2><p>${report.findings}</p></div>` : ""}
+${report.comment ? `<div class="section"><h2>Comment</h2><p>${report.comment}</p></div>` : ""}
+${report.impression ? `<div class="section"><h2>Impression</h2><p>${report.impression}</p></div>` : ""}
 <div class="footer">
-  <div><div class="sig">Hendor</div><strong>Hendor Wynne</strong><br>Medical Sonographer<br>HPCSA Reg: 0092673</div>
-  <div><strong>Hendors Diagnostics</strong><br>Practice No: 039004 0590266<br>George / Beaufort West<br>072 763 6282</div>
+  <div><img class="sig-img" src="${SIGNATURE_DATA_URL}" alt="Signature"/><strong>Hendor Wynne</strong><br>Medical Sonographer<br>HPCSA Reg: 0092673</div>
+  <div style="text-align:right"><strong>Hendors Diagnostics</strong><br>Practice No: 039004 0590266<br>George / Beaufort West<br>072 763 6282</div>
 </div>
 </body></html>`;
+  }
+
+  function printReport() {
+    const html = buildReportHtml();
     const w = window.open("","_blank");
     w.document.write(html);
     w.document.close();
@@ -460,10 +506,13 @@ ${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-s
               <div className="s-field"><label>Study Title</label><input value={report.study_title} onChange={e=>setReport(r=>({...r,study_title:e.target.value}))} placeholder="e.g. 20-week morphology scan"/></div>
               <div className="s-row2">
                 <div className="s-field"><label>Referring Doctor</label>
-                  <select value={report.referring_doctor} onChange={e=>setReport(r=>({...r,referring_doctor:e.target.value}))}>
-                    <option value="">Select…</option>
-                    {DOCTORS.map(d=><option key={d}>{d}</option>)}
-                  </select>
+                  <div className="doc-select-row">
+                    <select value={report.referring_doctor} onChange={e=>setReport(r=>({...r,referring_doctor:e.target.value}))}>
+                      <option value="">Select…</option>
+                      {doctors.map(d=><option key={d}>{d}</option>)}
+                    </select>
+                    <button type="button" className="doc-manage-btn" onClick={()=>setShowDoctorMgr(true)} title="Manage doctors">⚙️</button>
+                  </div>
                 </div>
                 <div className="s-field"><label>Performed By</label><input value={report.performed_by} onChange={e=>setReport(r=>({...r,performed_by:e.target.value}))}/></div>
               </div>
@@ -500,8 +549,19 @@ ${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-s
             </div>
           </div>
 
-          {/* Right: Report body */}
+          {/* Right: Transcript + Report body */}
           <div className="studio-right">
+            <div className="s-section">
+              <div className="s-title-row">
+                <h3 className="s-title">Transcribe</h3>
+                <button className="gen-btn ghost" onClick={()=>setReport(r=>({...r,transcript:""}))} disabled={!report.transcript}>
+                  🗑️ Clear
+                </button>
+              </div>
+              <DictateTextarea rows={6} value={report.transcript} onChange={v=>setReport(r=>({...r,transcript:v}))} placeholder="Dictate your raw notes here — separate from the final report. Use this as a scratchpad, then click 'Use Transcript' below to feed it into AI Generate Report."/>
+              <p className="transcribe-hint">🎤 This stays separate from the final report. Dictate freely, then use it as input below.</p>
+            </div>
+
             <div className="s-section">
               <div className="s-title-row">
                 <h3 className="s-title">Report</h3>
@@ -532,6 +592,7 @@ ${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-s
                 </select>
               </div>
               <button className="act-s save" onClick={saveReport} disabled={saving}>{saving?"Saving…":"💾 Save to Cloud"}</button>
+              <button className="act-s preview" onClick={()=>setShowPdfPreview(true)}>👁️ Preview</button>
               <button className="act-s print" onClick={printReport}>🖨️ Print / PDF</button>
               <button className="act-s new" onClick={()=>{setReport(defaultReport());setPatientSearch("");setStatus(null);}}>➕ New</button>
             </div>
@@ -566,6 +627,54 @@ ${report.impression ? `<div class="section"><h2>Impression</h2><p style="white-s
                 {!loadingCases&&cases.length===0&&<tr><td colSpan={6} className="empty">No reports yet</td></tr>}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {showPdfPreview && (
+        <div className="modal-overlay" onClick={()=>setShowPdfPreview(false)}>
+          <div className="modal-box modal-preview" onClick={e=>e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Report Preview</h3>
+              <div className="modal-header-actions">
+                <button className="act-s print" onClick={printReport}>🖨️ Print / PDF</button>
+                <button className="modal-close" onClick={()=>setShowPdfPreview(false)}>✕</button>
+              </div>
+            </div>
+            <iframe
+              title="Report Preview"
+              className="preview-iframe"
+              srcDoc={buildReportHtml()}
+            />
+          </div>
+        </div>
+      )}
+
+      {showDoctorMgr && (
+        <div className="modal-overlay" onClick={()=>setShowDoctorMgr(false)}>
+          <div className="modal-box modal-doctors" onClick={e=>e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Manage Referring Doctors</h3>
+              <button className="modal-close" onClick={()=>setShowDoctorMgr(false)}>✕</button>
+            </div>
+            <div className="doc-add-row">
+              <input
+                placeholder="Add new doctor name…"
+                value={newDoctorName}
+                onChange={e=>setNewDoctorName(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter") addDoctor();}}
+              />
+              <button className="act-s save" onClick={addDoctor}>+ Add</button>
+            </div>
+            <div className="doc-list">
+              {doctors.map(d=>(
+                <div key={d} className="doc-list-item">
+                  <span>{d}</span>
+                  <button className="doc-remove" onClick={()=>removeDoctor(d)} title="Remove">🗑️</button>
+                </div>
+              ))}
+              {doctors.length===0 && <p className="empty">No doctors added yet</p>}
+            </div>
           </div>
         </div>
       )}

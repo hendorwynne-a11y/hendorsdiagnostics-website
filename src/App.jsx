@@ -1,10 +1,11 @@
 import ReportStudio from "./ReportStudio.jsx";
 import React, { useState } from "react";
 import "./App.css";
+import { LOGO_DATA_URL } from "./brandAssets.js";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"
+const SUPABASE_ANON_KEY = ""; // ← paste your eyJ... key here
 
 async function sbFetch(path, opts = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -25,8 +26,8 @@ async function sbFetch(path, opts = {}) {
 
 // ── Staff credentials (simple — upgrade to Supabase Auth later) ──────────────
 const STAFF = {
-  hendor: { password: "hd1", role: "admin", name: "Hendor Wynne" },
-  reception: { password: "hd2", role: "reception", name: "Reception" },
+  hendor: { password: "hd2025admin", role: "admin", name: "Dr Hendor" },
+  reception: { password: "hd2025desk", role: "reception", name: "Reception" },
 };
 
 // ── Colour palette ───────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ function Login({ onLogin }) {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-logo">HD</div>
+        <img src={LOGO_DATA_URL} alt="Hendors Diagnostics" className="login-logo-img" />
         <h1>Hendors Diagnostics</h1>
         <p className="login-sub">Staff Portal</p>
         <form onSubmit={handleLogin}>
@@ -112,7 +113,7 @@ function Shell({ user, onLogout, page, setPage, children }) {
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="brand-hd">HD</span>
+          <img src={LOGO_DATA_URL} alt="Hendors Diagnostics" className="brand-logo-img" />
           <span className="brand-name">FrontDesk</span>
         </div>
         <nav className="sidebar-nav">
