@@ -51,10 +51,17 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("patients");
   const [teamupSettings, setTeamupSettings] = React.useState(loadTeamUpSettings);
+  const [prefillPatient, setPrefillPatient] = React.useState(null);
 
   function updateTeamupSettings(newSettings) {
     setTeamupSettings(newSettings);
     saveTeamUpSettings(newSettings);
+  }
+
+  function approveAndOpen(patientData) {
+    // Called by Intake after successful approval — prefills Report Studio
+    setPrefillPatient(patientData);
+    setPage("studio");
   }
 
   if (!user) return <Login onLogin={setUser} />;
@@ -64,8 +71,8 @@ export default function App() {
       {page === "bookings" && <Bookings teamupSettings={teamupSettings} />}
       {page === "billing" && <Billing />}
       {page === "reports" && <Reports user={user} />}
-      {page === "intake" && <Intake />}
-      {page === "studio" && <ReportStudio supabaseKey={SUPABASE_ANON_KEY} />}
+      {page === "intake" && <Intake onApproveAndOpen={approveAndOpen} />}
+      {page === "studio" && <ReportStudio supabaseKey={SUPABASE_ANON_KEY} prefillPatient={prefillPatient} onPrefillUsed={() => setPrefillPatient(null)} />}
       {page === "settings" && <Settings teamupSettings={teamupSettings} onSave={updateTeamupSettings} />}
       {page === "password" && <ChangePassword user={user} onPasswordChanged={(newPwd) => {
         STAFF[user.username].password = newPwd;
@@ -204,7 +211,7 @@ function Patients() {
   }
 
   const filtered = patients.filter(p =>
-    [p.patient_name, p.full_name, p.patient_id_file, p.id_number, p.phone, p.medical_aid]
+    [p.patient_name, p.full_name, p.patient_id_file, p.id_number, p.phone]
       .join(" ").toLowerCase().includes(search.toLowerCase())
   );
 
@@ -226,17 +233,17 @@ function Patients() {
         <table>
           <thead>
             <tr>
-              <th>Name</th><th>ID Number</th><th>Phone</th>
-              <th>Medical Aid</th><th>DOB</th><th>Action</th>
+              <th>Name</th><th>ID File</th><th>Phone</th>
+              <th>Gender</th><th>DOB</th><th>Action</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
                 <td><strong>{p.patient_name || p.full_name}</strong></td>
-                <td>{p.patient_id_file || p.id_number || "—"}</td>
+                <td>{p.patient_id_file || "—"}</td>
                 <td>{p.phone || "—"}</td>
-                <td>{p.medical_aid || "Cash"}</td>
+                <td>{p.gender || "—"}</td>
                 <td>{p.dob || "—"}</td>
                 <td>
                   <button className="act-btn delete" onClick={() => deletePatient(p)} title="Delete patient">🗑️</button>
@@ -767,10 +774,11 @@ function Reports({ user }) {
 }
 
 // ── INTAKE ────────────────────────────────────────────────────────────────────
-function Intake() {
+function Intake({ onApproveAndOpen }) {
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
+  const [showApproved, setShowApproved] = React.useState(false);
 
   React.useEffect(() => {
     sbFetch("pending_intake?select=*&order=created_at.desc&limit=100")
@@ -783,44 +791,106 @@ function Intake() {
     try {
       const payload = {};
       if (item.full_name)        payload.patient_name     = item.full_name;
-      if (item.phone)            payload.phone            = item.phone;
-      if (item.email)            payload.email            = item.email;
       if (item.id_number)        payload.patient_id_file  = item.id_number;
       if (item.dob)              payload.dob              = item.dob;
       if (item.sex)              payload.gender           = item.sex;
+      if (item.phone)            payload.phone            = item.phone;
+      if (item.email)            payload.email            = item.email;
       if (item.referring_doctor) payload.referring_doctor = item.referring_doctor;
-      if (item.address)          payload.address          = item.address;
 
       await sbFetch(`patients`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
-
       await sbFetch(`pending_intake?id=eq.${item.id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: "Approved" }),
       });
-
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
+
+      // Auto-navigate to Report Studio with patient pre-filled
+      onApproveAndOpen({
+        patient_name:     item.full_name || "",
+        patient_id:       item.id_number || "",
+        dob:              item.dob || "",
+        age:              item.age || "",
+        gender:           item.sex || "",
+        phone:            item.phone || "",
+        medical_aid:      item.medical_aid || "",
+        referring_doctor: item.referring_doctor || "",
+      });
     } catch (e) {
       alert("Error approving: " + e.message);
     }
   }
 
+  async function deleteIntake(item) {
+    if (!window.confirm(`Delete intake record for ${item.full_name}?\n\nThis removes it from the intake list only — it will NOT affect the Patient Register.`)) return;
+    try {
+      await sbFetch(`pending_intake?id=eq.${item.id}`, { method: "DELETE" });
+      setItems(prev => prev.filter(i => i.id !== item.id));
+    } catch (e) {
+      alert("Error deleting: " + e.message);
+    }
+  }
+
+  async function clearAllApproved() {
+    const approved = items.filter(i => i.status === "Approved");
+    if (approved.length === 0) return;
+    if (!window.confirm(`Remove all ${approved.length} approved record(s) from this list?\n\nThey are already saved in the Patient Register — this just cleans up the intake list.`)) return;
+    try {
+      await sbFetch(`pending_intake?status=eq.Approved`, { method: "DELETE" });
+      setItems(prev => prev.filter(i => i.status !== "Approved"));
+    } catch (e) {
+      alert("Error clearing: " + e.message);
+    }
+  }
+
   const pending = items.filter(i => i.status !== "Approved");
+  const approved = items.filter(i => i.status === "Approved");
+  const displayed = showApproved ? items : pending;
 
   return (
     <div className="page">
       <div className="page-header">
         <h2>Patient Intake</h2>
         <span className="badge orange">{pending.length} pending</span>
+        {approved.length > 0 && (
+          <span className="badge" style={{ background: "#e8f5e9", color: "#2e7d32" }}>
+            {approved.length} approved
+          </span>
+        )}
       </div>
+
+      {/* Toolbar */}
+      <div className="intake-toolbar">
+        <button
+          className={`filter-btn ${showApproved ? "active" : ""}`}
+          onClick={() => setShowApproved(v => !v)}
+        >
+          {showApproved ? "Hide Approved" : "Show Approved"}
+        </button>
+        {approved.length > 0 && (
+          <button className="filter-btn" onClick={clearAllApproved} style={{ color: "#be123c", borderColor: "#fda4af" }}>
+            🗑️ Clear All Approved
+          </button>
+        )}
+      </div>
+
       {loading && <p className="loading">Loading…</p>}
       {err && <p className="error">⚠ {err}</p>}
+
       <div className="intake-grid">
-        {items.map(item => (
+        {displayed.map(item => (
           <div key={item.id} className={`intake-card ${item.status === "Approved" ? "approved" : ""}`}>
-            <div className="intake-name">{item.full_name}</div>
+            <div className="intake-card-header">
+              <div className="intake-name">{item.full_name}</div>
+              <button
+                className="intake-delete-btn"
+                onClick={() => deleteIntake(item)}
+                title="Delete this intake record"
+              >🗑️</button>
+            </div>
             <div className="intake-details">
               <span>📱 {item.phone || "—"}</span>
               <span>🪪 {item.id_number || "—"}</span>
@@ -829,12 +899,18 @@ function Intake() {
             </div>
             <div className="intake-time">{item.created_at?.slice(0,16).replace("T"," ") || ""}</div>
             {item.status === "Approved"
-              ? <span className="status status-approved">✓ Approved</span>
+              ? <span className="status status-approved">✓ Approved — in Patient Register</span>
               : <button className="approve-btn" onClick={() => approve(item)}>Approve → Add to Register</button>
             }
           </div>
         ))}
-        {!loading && items.length === 0 && <p className="empty">No intake submissions yet</p>}
+        {!loading && displayed.length === 0 && (
+          <p className="empty">
+            {pending.length === 0 && !showApproved
+              ? "All caught up! No pending intake submissions."
+              : "No intake submissions yet"}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -897,3 +973,4 @@ function ChangePassword({ user, onPasswordChanged }) {
     </div>
   );
 }
+
