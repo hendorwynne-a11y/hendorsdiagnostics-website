@@ -13,8 +13,8 @@ const SCAN_TYPES = [
 
 // Default doctors - editable via Manage Doctors panel, persisted in Supabase 'doctors' table
 const DEFAULT_DOCTORS = [
-  "Dr Kritzinger","Dr Van der Merwe","Dr Joubert","Dr Smith","Dr Botha",
-  "Dr Nel","Dr Pretorius","Dr Du Plessis","Dr Venter"
+  "Dr Kritzinger","Dr Stockight","Dr Van Der Westhuizen","Dr Easton","Dr De Villiers",
+  "Dr Van Niekerk","Sr Jacobs","Dr Beneke","Dr Volschenk"
 ];
 
 async function sbFetch(path, opts={}, key) {
@@ -115,7 +115,7 @@ function DictateTextarea({ value, onChange, placeholder, rows }) {
   );
 }
 
-export default function ReportStudio({ supabaseKey }) {
+export default function ReportStudio({ supabaseKey, prefillPatient, onPrefillUsed }) {
   const [tab, setTab] = useState("new");
   const [cases, setCases] = useState([]);
   const [loadingCases, setLoadingCases] = useState(false);
@@ -138,6 +138,32 @@ export default function ReportStudio({ supabaseKey }) {
       status: "Draft",
     };
   }
+
+  // When a patient is started from Patients or approved from Intake, prefill here
+  useEffect(() => {
+    if (prefillPatient) {
+      setReport(r => ({
+        ...defaultReport(),
+        patient_name:     prefillPatient.patient_name || "",
+        patient_id:       prefillPatient.patient_id || "",
+        dob:              prefillPatient.dob || "",
+        age:              prefillPatient.age || "",
+        gender:           prefillPatient.gender || "",
+        phone:            prefillPatient.phone || "",
+        medical_aid:      prefillPatient.medical_aid || "",
+        referring_doctor: prefillPatient.referring_doctor || "",
+        exam_date:        new Date().toISOString().slice(0,10),
+        status:           "Draft",
+      }));
+      setPatientSearch(prefillPatient.patient_name || "");
+      setTab("new");
+      setStatus({
+        type: "success",
+        msg: `▶ Scan started for ${prefillPatient.patient_name}. Fill in findings now or save as Draft and return later. Use "AI Extract" after pasting a scan image.`
+      });
+      if (onPrefillUsed) onPrefillUsed();
+    }
+  }, [prefillPatient]);
 
   useEffect(() => {
     if (tab === "cases") loadCases();
@@ -965,3 +991,4 @@ ${isOB ? buildOBChartHtml(report.measurements) : ""}
     </div>
   );
 }
+
