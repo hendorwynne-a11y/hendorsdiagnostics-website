@@ -204,7 +204,7 @@ function Patients() {
   }
 
   const filtered = patients.filter(p =>
-    [p.full_name, p.id_number, p.phone, p.medical_aid]
+    [p.patient_name, p.full_name, p.patient_id_file, p.id_number, p.phone, p.medical_aid]
       .join(" ").toLowerCase().includes(search.toLowerCase())
   );
 
@@ -233,8 +233,8 @@ function Patients() {
           <tbody>
             {filtered.map(p => (
               <tr key={p.id}>
-                <td><strong>{p.full_name}</strong></td>
-                <td>{p.id_number || "—"}</td>
+                <td><strong>{p.patient_name || p.full_name}</strong></td>
+                <td>{p.patient_id_file || p.id_number || "—"}</td>
                 <td>{p.phone || "—"}</td>
                 <td>{p.medical_aid || "Cash"}</td>
                 <td>{p.dob || "—"}</td>
@@ -781,64 +781,31 @@ function Intake() {
 
   async function approve(item) {
     try {
-      // Build payload — only include fields with actual values to avoid
-      // Supabase 400 errors from columns that don't exist or have NOT NULL constraints.
       const payload = {};
-      if (item.full_name)        payload.full_name        = item.full_name;
+      if (item.full_name)        payload.patient_name     = item.full_name;
       if (item.phone)            payload.phone            = item.phone;
       if (item.email)            payload.email            = item.email;
-      if (item.id_number)        payload.id_number        = item.id_number;
+      if (item.id_number)        payload.patient_id_file  = item.id_number;
+      if (item.dob)              payload.dob              = item.dob;
+      if (item.sex)              payload.gender           = item.sex;
       if (item.medical_aid)      payload.medical_aid      = item.medical_aid;
+      if (item.medical_aid_no)   payload.medical_aid_no   = item.medical_aid_no;
+      if (item.referring_doctor) payload.referring_doctor = item.referring_doctor;
+      if (item.address)          payload.address          = item.address;
 
-      // These columns may or may not exist in your patients table — try each
-      // one and skip silently if Supabase rejects an unknown column.
-      const optional = {
-        dob:              item.dob,
-        sex:              item.sex,
-        address:          item.address,
-        medical_aid_no:   item.medical_aid_no,
-        referring_doctor: item.referring_doctor,
-      };
-      for (const [k, v] of Object.entries(optional)) {
-        if (v) payload[k] = v;
-      }
+      await sbFetch(`patients`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
 
-      // First try with all fields
-      let saved = false;
-      try {
-        await sbFetch(`patients`, {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        saved = true;
-      } catch (e1) {
-        // If 400, retry with only the guaranteed core fields
-        if (e1.message.includes("400") || e1.message.includes("column")) {
-          const core = {};
-          if (payload.full_name)   core.full_name   = payload.full_name;
-          if (payload.phone)       core.phone       = payload.phone;
-          if (payload.email)       core.email       = payload.email;
-          if (payload.id_number)   core.id_number   = payload.id_number;
-          if (payload.medical_aid) core.medical_aid = payload.medical_aid;
-          await sbFetch(`patients`, {
-            method: "POST",
-            body: JSON.stringify(core),
-          });
-          saved = true;
-        } else {
-          throw e1;
-        }
-      }
+      await sbFetch(`pending_intake?id=eq.${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "Approved" }),
+      });
 
-      if (saved) {
-        await sbFetch(`pending_intake?id=eq.${item.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ status: "Approved" }),
-        });
-        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
-      }
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
     } catch (e) {
-      alert("Error approving: " + e.message + "\n\nTip: Check that your Supabase 'patients' table has the required columns and that Row Level Security allows inserts.");
+      alert("Error approving: " + e.message);
     }
   }
 
