@@ -788,8 +788,6 @@ function Intake() {
       if (item.id_number)        payload.patient_id_file  = item.id_number;
       if (item.dob)              payload.dob              = item.dob;
       if (item.sex)              payload.gender           = item.sex;
-      if (item.medical_aid)      payload.medical_aid      = item.medical_aid;
-      if (item.medical_aid_no)   payload.medical_aid_no   = item.medical_aid_no;
       if (item.referring_doctor) payload.referring_doctor = item.referring_doctor;
       if (item.address)          payload.address          = item.address;
 
