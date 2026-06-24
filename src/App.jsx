@@ -71,11 +71,11 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
   return (
     <Shell user={user} onLogout={() => setUser(null)} page={page} setPage={setPage}>
-      {page === "patients" && <Patients onStartScan={startScan} />}
+      {page === "patients" && <Patients onStartScan={startScan} user={user} />}
       {page === "bookings" && <Bookings teamupSettings={teamupSettings} />}
       {page === "billing" && <Billing />}
       {page === "reports" && <Reports user={user} />}
-      {page === "intake" && <Intake onApproveAndOpen={approveAndOpen} />}
+      {page === "intake" && <Intake onApproveAndOpen={approveAndOpen} user={user} />}
       {page === "studio" && <ReportStudio supabaseKey={SUPABASE_ANON_KEY} prefillPatient={prefillPatient} onPrefillUsed={() => setPrefillPatient(null)} />}
       {page === "settings" && <Settings teamupSettings={teamupSettings} onSave={updateTeamupSettings} />}
       {page === "password" && <ChangePassword user={user} onPasswordChanged={(newPwd) => {
@@ -191,7 +191,8 @@ function Shell({ user, onLogout, page, setPage, children }) {
 }
 
 // ── PATIENTS ──────────────────────────────────────────────────────────────────
-function Patients({ onStartScan }) {
+function Patients({ onStartScan, user }) {
+  const isAdmin = user?.role === "admin";
   const [patients, setPatients] = React.useState([]);
   const [search, setSearch] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -265,7 +266,9 @@ function Patients({ onStartScan }) {
                       referring_doctor: p.referring_doctor || p.physician || "",
                     })}
                   >▶ Start</button>
-                  <button className="act-btn delete" onClick={() => deletePatient(p)} title="Delete patient">🗑️</button>
+                  {isAdmin && (
+                    <button className="act-btn delete" onClick={() => deletePatient(p)} title="Delete patient">🗑️</button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -694,6 +697,7 @@ function Billing() {
 
 // ── REPORTS ───────────────────────────────────────────────────────────────────
 function Reports({ user }) {
+  const isAdmin = user?.role === "admin";
   const [reports, setReports] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
@@ -778,7 +782,9 @@ function Reports({ user }) {
                   <button className="act-btn whatsapp" onClick={() => sendWhatsAppDoctor(r)} title="WhatsApp Doctor">💬D</button>
                   <button className="act-btn email" onClick={() => sendEmailPatient(r)} title="Email Patient">✉️P</button>
                   <button className="act-btn email" onClick={() => sendEmailDoctor(r)} title="Email Doctor">✉️D</button>
-                  <button className="act-btn delete" onClick={() => deleteReport(r)} title="Delete report">🗑️</button>
+                  {isAdmin && (
+                    <button className="act-btn delete" onClick={() => deleteReport(r)} title="Delete report">🗑️</button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -793,7 +799,8 @@ function Reports({ user }) {
 }
 
 // ── INTAKE ────────────────────────────────────────────────────────────────────
-function Intake({ onApproveAndOpen }) {
+function Intake({ onApproveAndOpen, user }) {
+  const isAdmin = user?.role === "admin";
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
@@ -889,7 +896,7 @@ function Intake({ onApproveAndOpen }) {
         >
           {showApproved ? "Hide Approved" : "Show Approved"}
         </button>
-        {approved.length > 0 && (
+        {isAdmin && approved.length > 0 && (
           <button className="filter-btn" onClick={clearAllApproved} style={{ color: "#be123c", borderColor: "#fda4af" }}>
             🗑️ Clear All Approved
           </button>
@@ -904,11 +911,13 @@ function Intake({ onApproveAndOpen }) {
           <div key={item.id} className={`intake-card ${item.status === "Approved" ? "approved" : ""}`}>
             <div className="intake-card-header">
               <div className="intake-name">{item.full_name}</div>
-              <button
-                className="intake-delete-btn"
-                onClick={() => deleteIntake(item)}
-                title="Delete this intake record"
-              >🗑️</button>
+              {isAdmin && (
+                <button
+                  className="intake-delete-btn"
+                  onClick={() => deleteIntake(item)}
+                  title="Delete this intake record"
+                >🗑️</button>
+              )}
             </div>
             <div className="intake-details">
               <span>📱 {item.phone || "—"}</span>
