@@ -59,7 +59,11 @@ export default function App() {
   }
 
   function approveAndOpen(patientData) {
-    // Called by Intake after successful approval — prefills Report Studio
+    setPrefillPatient(patientData);
+    setPage("studio");
+  }
+
+  function startScan(patientData) {
     setPrefillPatient(patientData);
     setPage("studio");
   }
@@ -67,7 +71,7 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
   return (
     <Shell user={user} onLogout={() => setUser(null)} page={page} setPage={setPage}>
-      {page === "patients" && <Patients />}
+      {page === "patients" && <Patients onStartScan={startScan} />}
       {page === "bookings" && <Bookings teamupSettings={teamupSettings} />}
       {page === "billing" && <Billing />}
       {page === "reports" && <Reports user={user} />}
@@ -187,7 +191,7 @@ function Shell({ user, onLogout, page, setPage, children }) {
 }
 
 // ── PATIENTS ──────────────────────────────────────────────────────────────────
-function Patients() {
+function Patients({ onStartScan }) {
   const [patients, setPatients] = React.useState([]);
   const [search, setSearch] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -201,7 +205,8 @@ function Patients() {
   }, []);
 
   async function deletePatient(p) {
-    if (!window.confirm(`Delete patient: ${p.full_name}?\n\nThis cannot be undone.`)) return;
+    const name = p.patient_name || p.full_name || "this patient";
+    if (!window.confirm(`Delete patient: ${name}?\n\nThis cannot be undone.`)) return;
     try {
       await sbFetch(`patients?id=eq.${p.id}`, { method: "DELETE" });
       setPatients(prev => prev.filter(x => x.id !== p.id));
@@ -223,7 +228,7 @@ function Patients() {
       </div>
       <input
         className="search-input"
-        placeholder="Search by name, ID, phone or medical aid…"
+        placeholder="Search by name, ID, phone…"
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
@@ -234,7 +239,7 @@ function Patients() {
           <thead>
             <tr>
               <th>Name</th><th>ID File</th><th>Phone</th>
-              <th>Gender</th><th>DOB</th><th>Action</th>
+              <th>Gender</th><th>DOB</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -245,7 +250,21 @@ function Patients() {
                 <td>{p.phone || "—"}</td>
                 <td>{p.gender || "—"}</td>
                 <td>{p.dob || "—"}</td>
-                <td>
+                <td className="actions-cell">
+                  <button
+                    className="act-btn start-scan"
+                    title="Start scan — opens Report Studio with this patient"
+                    onClick={() => onStartScan({
+                      patient_name:     p.patient_name || p.full_name || "",
+                      patient_id:       p.patient_id_file || "",
+                      dob:              p.dob || "",
+                      age:              p.age || "",
+                      gender:           p.gender || "",
+                      phone:            p.phone || "",
+                      medical_aid:      p.medical_aid || "",
+                      referring_doctor: p.referring_doctor || p.physician || "",
+                    })}
+                  >▶ Start</button>
                   <button className="act-btn delete" onClick={() => deletePatient(p)} title="Delete patient">🗑️</button>
                 </td>
               </tr>
