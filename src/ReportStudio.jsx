@@ -13,8 +13,8 @@ const SCAN_TYPES = [
 
 // Default doctors - editable via Manage Doctors panel, persisted in Supabase 'doctors' table
 const DEFAULT_DOCTORS = [
-  "Dr Kritzinger","Dr Stockight","Dr Van Der Westhuizen","Dr Easton","Dr De Villiers",
-  "Dr Van Niekerk","Sr Jacobs","Dr Beneke","Dr Volschenk"
+  "Dr Kritzinger","Dr Van der Merwe","Dr Joubert","Dr Smith","Dr Botha",
+  "Dr Nel","Dr Pretorius","Dr Du Plessis","Dr Venter"
 ];
 
 async function sbFetch(path, opts={}, key) {
@@ -134,9 +134,49 @@ export default function ReportStudio({ supabaseKey, prefillPatient, onPrefillUse
       exam_date: new Date().toISOString().slice(0,10),
       scan_type: "OBSTETRIC", study_title: "",
       referring_doctor: "", performed_by: "Hendor Wynne",
-      measurements: "", findings: "", comment: "", impression: "", transcript: "",
+      // Structured biometry fields
+      bpd: "", hc: "", ac: "", fl: "", efw: "", fhr: "", afi: "", placenta: "",
+      // Doppler fields
+      ua_pi: "", ua_ri: "", ua_sd: "", ua_edf: "",
+      mca_pi: "", mca_ri: "", mca_psv: "", cpr: "",
+      meas_notes: "",
+      // Combined text (auto-built from fields above)
+      measurements: "",
+      findings: "", comment: "", impression: "", transcript: "",
       status: "Draft",
     };
+  }
+
+  // Build a clean measurements text string from structured fields
+  function buildMeasText(r) {
+    const lines = [];
+    if (r.bpd)      lines.push(`BPD: ${r.bpd}mm`);
+    if (r.hc)       lines.push(`HC: ${r.hc}mm`);
+    if (r.ac)       lines.push(`AC: ${r.ac}mm`);
+    if (r.fl)       lines.push(`FL: ${r.fl}mm`);
+    if (r.efw)      lines.push(`EFW: ${r.efw}g`);
+    if (r.fhr)      lines.push(`FHR: ${r.fhr} bpm`);
+    if (r.afi)      lines.push(`AFI: ${r.afi}cm`);
+    if (r.placenta) lines.push(`Placenta: ${r.placenta}`);
+    if (r.ua_pi || r.ua_ri || r.ua_sd || r.ua_edf) {
+      lines.push("--- Umbilical Artery Doppler ---");
+      if (r.ua_pi)  lines.push(`UA PI: ${r.ua_pi}`);
+      if (r.ua_ri)  lines.push(`Umb RI: ${r.ua_ri}`);
+      if (r.ua_sd)  lines.push(`UA S/D: ${r.ua_sd}`);
+      if (r.ua_edf) lines.push(`End Diastolic Flow: ${r.ua_edf}`);
+    }
+    if (r.mca_pi || r.mca_ri || r.mca_psv) {
+      lines.push("--- MCA Doppler ---");
+      if (r.mca_pi)  lines.push(`MCA PI: ${r.mca_pi}`);
+      if (r.mca_ri)  lines.push(`MCA RI: ${r.mca_ri}`);
+      if (r.mca_psv) lines.push(`MCA PSV: ${r.mca_psv} cm/s`);
+      const cpr = r.ua_pi && r.mca_pi
+        ? (parseFloat(r.mca_pi)/parseFloat(r.ua_pi)).toFixed(2)
+        : r.cpr;
+      if (cpr) lines.push(`CPR: ${cpr}`);
+    }
+    if (r.meas_notes) lines.push(r.meas_notes);
+    return lines.join("\n");
   }
 
   // When a patient is started from Patients or approved from Intake, prefill here
@@ -202,9 +242,10 @@ export default function ReportStudio({ supabaseKey, prefillPatient, onPrefillUse
   const [extracting, setExtracting] = useState(false);
   const fileInputRef = useRef(null);
   const pasteZoneRef = useRef(null);
-  const [doctors, setDoctors] = useState(DEFAULT_DOCTORS);
+  const [doctors, setDoctors] = useState([]);
   const [showDoctorMgr, setShowDoctorMgr] = useState(false);
-  const [newDoctorName, setNewDoctorName] = useState("");
+  const [newDoc, setNewDoc] = useState({ name: "", phone: "", email: "" });
+  const [editingDoctor, setEditingDoctor] = useState(null); // { original, name, phone, email }
   const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   useEffect(() => { loadDoctors(); }, []);
@@ -212,32 +253,49 @@ export default function ReportStudio({ supabaseKey, prefillPatient, onPrefillUse
   async function loadDoctors() {
     try {
       const rows = await sbFetch("doctors?select=*&order=name", {}, supabaseKey);
-      if (rows.length > 0) setDoctors(rows.map(d => d.name));
+      if (rows.length > 0) setDoctors(rows);
+      else setDoctors(DEFAULT_DOCTORS.map(name => ({ name, phone: "", email: "" })));
     } catch(e) {
-      // table may not exist yet - fall back to defaults silently
+      setDoctors(DEFAULT_DOCTORS.map(name => ({ name, phone: "", email: "" })));
     }
   }
 
   async function addDoctor() {
-    const name = newDoctorName.trim();
+    const name = newDoc.name.trim();
     if (!name) return;
-    if (doctors.includes(name)) { setNewDoctorName(""); return; }
+    if (doctors.find(d => d.name === name)) { setNewDoc({ name: "", phone: "", email: "" }); return; }
+    const docObj = { name, phone: newDoc.phone.trim(), email: newDoc.email.trim() };
     try {
-      await sbFetch("doctors", { method: "POST", body: JSON.stringify({ name }) }, supabaseKey);
-      setDoctors(prev => [...prev, name].sort());
-      setNewDoctorName("");
-    } catch(e) {
-      setDoctors(prev => [...prev, name].sort());
-      setNewDoctorName("");
-    }
+      await sbFetch("doctors", { method: "POST", body: JSON.stringify(docObj) }, supabaseKey);
+    } catch(e) {}
+    setDoctors(prev => [...prev, docObj].sort((a,b) => a.name.localeCompare(b.name)));
+    setNewDoc({ name: "", phone: "", email: "" });
   }
 
   async function removeDoctor(name) {
     try {
       await sbFetch(`doctors?name=eq.${encodeURIComponent(name)}`, { method: "DELETE" }, supabaseKey);
     } catch(e) {}
-    setDoctors(prev => prev.filter(d => d !== name));
+    setDoctors(prev => prev.filter(d => d.name !== name));
     if (report.referring_doctor === name) setReport(r => ({...r, referring_doctor: ""}));
+  }
+
+  async function saveEditDoctor() {
+    if (!editingDoctor || !editingDoctor.name.trim()) return;
+    const updated = { name: editingDoctor.name.trim(), phone: editingDoctor.phone.trim(), email: editingDoctor.email.trim() };
+    try {
+      // Delete old, insert new (Supabase REST doesn't support upsert by name easily)
+      await sbFetch(`doctors?name=eq.${encodeURIComponent(editingDoctor.original)}`, { method: "DELETE" }, supabaseKey);
+      await sbFetch("doctors", { method: "POST", body: JSON.stringify(updated) }, supabaseKey);
+    } catch(e) {}
+    setDoctors(prev => prev.map(d => (d.name === editingDoctor.original ? updated : d)).sort((a,b) => a.name.localeCompare(b.name)));
+    if (report.referring_doctor === editingDoctor.original) setReport(r => ({...r, referring_doctor: updated.name}));
+    setEditingDoctor(null);
+  }
+
+  // Get full doctor object for the currently selected referring doctor
+  function selectedDoctor() {
+    return doctors.find(d => d.name === report.referring_doctor) || null;
   }
 
   function handlePaste(e) {
@@ -423,15 +481,23 @@ ${report.impression ? `<h2>Impression</h2><div class="section">${safe(report.imp
     const study = report.study_title || report.scan_type || "";
     const date = report.exam_date || "";
     const doctor = report.referring_doctor || "Doctor";
+    const doc = selectedDoctor();
     let phone = "";
     let msg = "";
     if (target === "patient") {
       phone = (report.phone || "").replace(/\D/g,"").replace(/^0/,"27");
+      if (!phone) { alert("No patient phone number saved on this report."); return; }
       msg = encodeURIComponent(
         `Hendors Diagnostics\n\nDear ${name},\n\nYour ultrasound report is ready.\nStudy: ${study}\nDate: ${date}\n\nPlease contact us to collect your report or arrange delivery.\n\nHendors Diagnostics\n📞 072 763 6282\n✉️ reception.hendors@gmail.com`
       );
     } else {
-      phone = "";
+      // Use stored doctor WhatsApp/phone number
+      const docPhone = (doc?.phone || doc?.whatsapp || "").replace(/\D/g,"").replace(/^0/,"27");
+      phone = docPhone;
+      if (!phone) {
+        // No number saved — open WhatsApp without a number (user can paste)
+        alert(`No phone number saved for ${doctor}.\n\nAdd their number in Manage Doctors (⚙️) first.\n\nOpening WhatsApp — you can manually paste the number.`);
+      }
       msg = encodeURIComponent(
         `Hendors Diagnostics\n\nDear ${doctor},\n\nReport completed for your patient: ${name}\nStudy: ${study}\nDate: ${date}\n\nPlease contact us if you require a copy.\n\nHendor Wynne\nMedical Sonographer\n📞 072 763 6282`
       );
@@ -447,6 +513,7 @@ ${report.impression ? `<h2>Impression</h2><div class="section">${safe(report.imp
     const study = report.study_title || report.scan_type || "";
     const date = report.exam_date || "";
     const doctor = report.referring_doctor || "Doctor";
+    const doc = selectedDoctor();
     let to = "";
     let subject = "";
     let body = "";
@@ -457,7 +524,12 @@ ${report.impression ? `<h2>Impression</h2><div class="section">${safe(report.imp
         `Dear ${name},\n\nYour ultrasound report is ready.\nStudy: ${study}\nDate: ${date}\n\nPlease contact us to collect your report or arrange delivery.\n\nHendors Diagnostics\nTel: 072 763 6282\nEmail: reception.hendors@gmail.com`
       );
     } else {
-      to = "";
+      // Use stored doctor email
+      to = doc?.email || "";
+      if (!to) {
+        alert(`No email address saved for ${doctor}.\n\nAdd their email in Manage Doctors (⚙️) first.`);
+        return;
+      }
       subject = encodeURIComponent(`Report: ${name} — ${study}`);
       body = encodeURIComponent(
         `Dear ${doctor},\n\nReport completed for your patient:\n\nPatient: ${name}\nStudy: ${study}\nDate: ${date}\n\nKind regards,\nHendor Wynne\nMedical Sonographer\nHendors Diagnostics\nTel: 072 763 6282`
@@ -576,7 +648,8 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
       return m ? parseFloat(m[1]) : null;
     };
     const bpd = get('BPD'), hc = get('HC'), ac = get('AC'), fl = get('FL');
-    const efw = get('EFW'), umbRI = get('Umb RI') || get('RI'), umbPI = get('Umb PI') || get('PI');
+    const efw = get('EFW'), umbRI = get('Umb RI') || get('RI'), umbPI = get('UA PI') || get('Umb PI') || get('PI');
+    const mcaPI = get('MCA PI'); const cpr = get('CPR');
     if (!bpd && !hc && !ac && !fl) return "";
 
     // GA estimate from BPD (Hadlock)
@@ -595,6 +668,9 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
       FL:     { title:'FL',  unit:'mm', ymin:5,  ymax:85,  weeks:[14,18,22,26,30,34,38,40], p50:[[14,15],[18,28],[22,39],[26,49],[30,59],[34,67],[38,75],[40,78]], spread:4, val:fl, ga:ga },
       EFW:    { title:'Estimated Fetal Weight (EFW)', unit:'g', ymin:100, ymax:4500, weeks:[18,22,26,30,34,38,40], p50:[[18,230],[22,500],[26,900],[30,1500],[34,2300],[38,3200],[40,3600]], spread:350, val:efw, ga:ga },
       UmbRI:  { title:'Umbilical Artery RI', unit:'', ymin:0.35, ymax:1.0, weeks:[18,22,26,30,34,38,40], p50:[[18,0.78],[22,0.72],[26,0.66],[30,0.61],[34,0.57],[38,0.53],[40,0.51]], spread:0.08, val:umbRI, ga:ga },
+      UmbPI:  { title:'Umbilical Artery PI', unit:'', ymin:0.4, ymax:2.0, weeks:[18,22,26,30,34,38,40], p50:[[18,1.5],[22,1.3],[26,1.1],[30,0.95],[34,0.85],[38,0.75],[40,0.70]], spread:0.25, val:umbPI, ga:ga },
+      MCAPI:  { title:'MCA PI', unit:'', ymin:0.8, ymax:2.8, weeks:[18,22,26,30,34,38,40], p50:[[18,1.8],[22,1.9],[26,1.95],[30,1.85],[34,1.65],[38,1.45],[40,1.35]], spread:0.35, val:mcaPI, ga:ga },
+      CPR:    { title:'Cerebroplacental Ratio (CPR)', unit:'', ymin:0.5, ymax:3.0, weeks:[18,22,26,30,34,38,40], p50:[[18,1.8],[22,1.9],[26,1.95],[30,1.9],[34,1.7],[38,1.5],[40,1.4]], spread:0.4, val:cpr, ga:ga },
     };
 
     function interp(pts, x) {
@@ -665,7 +741,7 @@ Keep it clinical, professional and concise. Do NOT include patient header info o
         </div>`;
     }
 
-    const charts = ['BPD','HC','AC','FL','EFW','UmbRI'].map(makeChart).filter(Boolean).join('');
+    const charts = ['BPD','HC','AC','FL','EFW','UmbPI','UmbRI','MCAPI','CPR'].map(makeChart).filter(Boolean).join('');
     if (!charts) return '';
 
     return `<div class="section" style="page-break-inside:avoid">
@@ -809,7 +885,7 @@ ${isOB ? buildOBChartHtml(report.measurements) : ""}
                   <div className="doc-select-row">
                     <select value={report.referring_doctor} onChange={e=>setReport(r=>({...r,referring_doctor:e.target.value}))}>
                       <option value="">Select…</option>
-                      {doctors.map(d=><option key={d}>{d}</option>)}
+                      {doctors.map(d=><option key={d.name || d}>{d.name || d}</option>)}
                     </select>
                     <button type="button" className="doc-manage-btn" onClick={()=>setShowDoctorMgr(true)} title="Manage doctors">⚙️</button>
                   </div>
@@ -842,10 +918,43 @@ ${isOB ? buildOBChartHtml(report.measurements) : ""}
             </div>
 
             <div className="s-section">
-              <h3 className="s-title">Measurements</h3>
-              <DictateTextarea rows={6} value={report.measurements}
-                onChange={v=>setReport(r=>({...r,measurements:v}))}
-                placeholder={"BPD: 72mm\nHC: 265mm\nAC: 230mm\nFL: 52mm\nEFW: 1450g\nFHR: 148 bpm\nAFI: 14cm\nPlacenta: posterior, grade 1"}/>
+              <h3 className="s-title">Measurements — Biometry</h3>
+              <div className="s-row3">
+                <div className="s-field"><label>BPD (mm)</label><input placeholder="e.g. 72" value={(report.bpd||"")} onChange={e=>setReport(r=>({...r,bpd:e.target.value,measurements:buildMeasText({...r,bpd:e.target.value})}))} /></div>
+                <div className="s-field"><label>HC (mm)</label><input placeholder="e.g. 265" value={(report.hc||"")} onChange={e=>setReport(r=>({...r,hc:e.target.value,measurements:buildMeasText({...r,hc:e.target.value})}))} /></div>
+                <div className="s-field"><label>AC (mm)</label><input placeholder="e.g. 230" value={(report.ac||"")} onChange={e=>setReport(r=>({...r,ac:e.target.value,measurements:buildMeasText({...r,ac:e.target.value})}))} /></div>
+                <div className="s-field"><label>FL (mm)</label><input placeholder="e.g. 52" value={(report.fl||"")} onChange={e=>setReport(r=>({...r,fl:e.target.value,measurements:buildMeasText({...r,fl:e.target.value})}))} /></div>
+                <div className="s-field"><label>EFW (g)</label><input placeholder="e.g. 1450" value={(report.efw||"")} onChange={e=>setReport(r=>({...r,efw:e.target.value,measurements:buildMeasText({...r,efw:e.target.value})}))} /></div>
+                <div className="s-field"><label>FHR (bpm)</label><input placeholder="e.g. 148" value={(report.fhr||"")} onChange={e=>setReport(r=>({...r,fhr:e.target.value,measurements:buildMeasText({...r,fhr:e.target.value})}))} /></div>
+                <div className="s-field"><label>AFI (cm)</label><input placeholder="e.g. 14" value={(report.afi||"")} onChange={e=>setReport(r=>({...r,afi:e.target.value,measurements:buildMeasText({...r,afi:e.target.value})}))} /></div>
+                <div className="s-field"><label>Placenta</label><input placeholder="e.g. posterior, grade 1" value={(report.placenta||"")} onChange={e=>setReport(r=>({...r,placenta:e.target.value,measurements:buildMeasText({...r,placenta:e.target.value})}))} /></div>
+              </div>
+
+              <h3 className="s-title" style={{marginTop:12}}>Umbilical Artery Doppler</h3>
+              <div className="s-row3">
+                <div className="s-field"><label>UA PI</label><input placeholder="e.g. 0.95" value={(report.ua_pi||"")} onChange={e=>setReport(r=>({...r,ua_pi:e.target.value,measurements:buildMeasText({...r,ua_pi:e.target.value})}))} /></div>
+                <div className="s-field"><label>UA RI</label><input placeholder="e.g. 0.62" value={(report.ua_ri||"")} onChange={e=>setReport(r=>({...r,ua_ri:e.target.value,measurements:buildMeasText({...r,ua_ri:e.target.value})}))} /></div>
+                <div className="s-field"><label>UA S/D Ratio</label><input placeholder="e.g. 2.6" value={(report.ua_sd||"")} onChange={e=>setReport(r=>({...r,ua_sd:e.target.value,measurements:buildMeasText({...r,ua_sd:e.target.value})}))} /></div>
+                <div className="s-field"><label>End Diastolic Flow</label>
+                  <select value={(report.ua_edf||"")} onChange={e=>setReport(r=>({...r,ua_edf:e.target.value,measurements:buildMeasText({...r,ua_edf:e.target.value})}))}>
+                    <option value="">— Select —</option>
+                    <option>Present</option>
+                    <option>Absent</option>
+                    <option>Reversed</option>
+                  </select>
+                </div>
+              </div>
+
+              <h3 className="s-title" style={{marginTop:12}}>MCA Doppler</h3>
+              <div className="s-row3">
+                <div className="s-field"><label>MCA PI</label><input placeholder="e.g. 1.82" value={(report.mca_pi||"")} onChange={e=>setReport(r=>({...r,mca_pi:e.target.value,measurements:buildMeasText({...r,mca_pi:e.target.value})}))} /></div>
+                <div className="s-field"><label>MCA RI</label><input placeholder="e.g. 0.79" value={(report.mca_ri||"")} onChange={e=>setReport(r=>({...r,mca_ri:e.target.value,measurements:buildMeasText({...r,mca_ri:e.target.value})}))} /></div>
+                <div className="s-field"><label>MCA PSV (cm/s)</label><input placeholder="e.g. 45" value={(report.mca_psv||"")} onChange={e=>setReport(r=>({...r,mca_psv:e.target.value,measurements:buildMeasText({...r,mca_psv:e.target.value})}))} /></div>
+                <div className="s-field"><label>CPR (UA PI / MCA PI)</label><input placeholder="Auto or manual" value={(report.ua_pi && report.mca_pi ? (parseFloat(report.mca_pi)/parseFloat(report.ua_pi)).toFixed(2) : report.cpr||"")} readOnly={!!(report.ua_pi && report.mca_pi)} onChange={e=>setReport(r=>({...r,cpr:e.target.value}))} style={{background: report.ua_pi && report.mca_pi ? "var(--color-background-secondary)" : undefined}} /></div>
+              </div>
+
+              <h3 className="s-title" style={{marginTop:12}}>Additional Notes</h3>
+              <DictateTextarea rows={3} value={report.meas_notes||""} onChange={v=>setReport(r=>({...r,meas_notes:v,measurements:buildMeasText({...r,meas_notes:v})}))} placeholder="Any additional measurements or observations…"/>
             </div>
           </div>
 
@@ -967,23 +1076,92 @@ ${isOB ? buildOBChartHtml(report.measurements) : ""}
               <h3>Manage Referring Doctors</h3>
               <button className="modal-close" onClick={()=>setShowDoctorMgr(false)}>✕</button>
             </div>
-            <div className="doc-add-row">
+            <div className="doc-add-row" style={{ flexDirection: "column", gap: 8 }}>
               <input
-                placeholder="Add new doctor name…"
-                value={newDoctorName}
-                onChange={e=>setNewDoctorName(e.target.value)}
+                placeholder="Doctor name *"
+                value={newDoc.name}
+                onChange={e=>setNewDoc(d=>({...d, name: e.target.value}))}
                 onKeyDown={e=>{if(e.key==="Enter") addDoctor();}}
               />
-              <button className="act-s save" onClick={addDoctor}>+ Add</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  placeholder="📱 Cell / WhatsApp (e.g. 0821234567)"
+                  value={newDoc.phone}
+                  onChange={e=>setNewDoc(d=>({...d, phone: e.target.value}))}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  placeholder="✉️ Email address"
+                  value={newDoc.email}
+                  onChange={e=>setNewDoc(d=>({...d, email: e.target.value}))}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <button className="act-s save" onClick={addDoctor} style={{ width: "100%" }}>+ Add Doctor</button>
             </div>
             <div className="doc-list">
-              {doctors.map(d=>(
-                <div key={d} className="doc-list-item">
-                  <span>{d}</span>
-                  <button className="doc-remove" onClick={()=>removeDoctor(d)} title="Remove">🗑️</button>
-                </div>
-              ))}
-              {doctors.length===0 && <p className="empty">No doctors added yet</p>}
+              {doctors.map(d => {
+                const key = d.name || d;
+                const isEditing = editingDoctor?.original === key;
+                return (
+                  <div key={key} className="doc-list-item" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6, padding: "10px 10px" }}>
+                    {isEditing ? (
+                      // ── Edit mode ──
+                      <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input
+                          value={editingDoctor.name}
+                          onChange={e => setEditingDoctor(ed => ({...ed, name: e.target.value}))}
+                          placeholder="Doctor name *"
+                          style={{ width: "100%", padding: "7px 10px", border: "1.5px solid #2d9cdb", borderRadius: 6, fontSize: 13, background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
+                        />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input
+                            value={editingDoctor.phone}
+                            onChange={e => setEditingDoctor(ed => ({...ed, phone: e.target.value}))}
+                            placeholder="📱 Cell / WhatsApp"
+                            style={{ flex: 1, padding: "7px 10px", border: "1.5px solid #dde3ec", borderRadius: 6, fontSize: 12, background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
+                          />
+                          <input
+                            value={editingDoctor.email}
+                            onChange={e => setEditingDoctor(ed => ({...ed, email: e.target.value}))}
+                            placeholder="✉️ Email"
+                            style={{ flex: 1, padding: "7px 10px", border: "1.5px solid #dde3ec", borderRadius: 6, fontSize: 12, background: "var(--color-background-secondary)", color: "var(--color-text-primary)" }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button className="act-s save" onClick={saveEditDoctor} style={{ flex: 1, padding: "7px" }}>✅ Save</button>
+                          <button className="act-s new" onClick={() => setEditingDoctor(null)} style={{ flex: 1, padding: "7px" }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      // ── View mode ──
+                      <>
+                        <div style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontWeight: 700, fontSize: 13 }}>{d.name || d}</span>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button
+                              className="doc-remove"
+                              style={{ color: "#1565c0", fontSize: 13 }}
+                              onClick={() => setEditingDoctor({ original: key, name: d.name || d, phone: d.phone || "", email: d.email || "" })}
+                              title="Edit doctor"
+                            >✏️</button>
+                            <button className="doc-remove" onClick={() => removeDoctor(d.name || d)} title="Remove">🗑️</button>
+                          </div>
+                        </div>
+                        {(d.phone || d.email) ? (
+                          <div style={{ fontSize: 11, color: "var(--color-text-secondary)", display: "flex", gap: 12, flexWrap: "wrap" }}>
+                            {d.phone && <span>📱 {d.phone}</span>}
+                            {d.email && <span>✉️ {d.email}</span>}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: "#f57c00" }}>⚠ No contact details — click ✏️ to add phone/email</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+              {doctors.length === 0 && <p className="empty">No doctors added yet</p>}
             </div>
           </div>
         </div>
