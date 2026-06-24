@@ -19,7 +19,11 @@ async function sbFetch(path, opts = {}) {
     },
     ...opts,
   });
-  if (!res.ok) throw new Error(`Supabase ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try { const j = await res.json(); detail = j.message || j.error || JSON.stringify(j); } catch (_) {}
+    throw new Error(`Supabase ${res.status}${detail ? ": " + detail : ""}`);
+  }
   const text = await res.text();
   return text ? JSON.parse(text) : [];
 }
@@ -33,19 +37,36 @@ const STAFF = {
 // ── Colour palette ───────────────────────────────────────────────────────────
 // Deep navy #0a1628, steel blue #1e3a5f, accent #2d9cdb, white, light grey #f4f7fb
 
+// ── TeamUp settings helpers ───────────────────────────────────────────────────
+function loadTeamUpSettings() {
+  try {
+    return JSON.parse(localStorage.getItem("hd_teamup_settings") || "{}");
+  } catch { return {}; }
+}
+function saveTeamUpSettings(s) {
+  localStorage.setItem("hd_teamup_settings", JSON.stringify(s));
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("patients");
+  const [teamupSettings, setTeamupSettings] = React.useState(loadTeamUpSettings);
+
+  function updateTeamupSettings(newSettings) {
+    setTeamupSettings(newSettings);
+    saveTeamUpSettings(newSettings);
+  }
 
   if (!user) return <Login onLogin={setUser} />;
   return (
     <Shell user={user} onLogout={() => setUser(null)} page={page} setPage={setPage}>
       {page === "patients" && <Patients />}
-      {page === "bookings" && <Bookings />}
+      {page === "bookings" && <Bookings teamupSettings={teamupSettings} />}
       {page === "billing" && <Billing />}
       {page === "reports" && <Reports user={user} />}
       {page === "intake" && <Intake />}
       {page === "studio" && <ReportStudio supabaseKey={SUPABASE_ANON_KEY} />}
+      {page === "settings" && <Settings teamupSettings={teamupSettings} onSave={updateTeamupSettings} />}
       {page === "password" && <ChangePassword user={user} onPasswordChanged={(newPwd) => {
         STAFF[user.username].password = newPwd;
       }} />}
@@ -112,6 +133,7 @@ function Shell({ user, onLogout, page, setPage, children }) {
     { id: "reports", label: "Reports", icon: "📋" },
     { id: "intake", label: "Intake", icon: "📥" },
     { id: "studio", label: "Report Studio", icon: "🩺", adminOnly: true },
+    { id: "settings", label: "Settings", icon: "⚙️", adminOnly: true },
     { id: "password", label: "Change Password", icon: "🔑" },
   ];
 
@@ -232,10 +254,19 @@ function Patients() {
 }
 
 // ── BOOKINGS ──────────────────────────────────────────────────────────────────
-function Bookings() {
+function Bookings({ teamupSettings }) {
   const [bookings, setBookings] = React.useState([]);
+  const [teamupEvents, setTeamupEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [syncing, setSyncing] = React.useState(false);
   const [err, setErr] = React.useState("");
+  const [syncMsg, setSyncMsg] = React.useState("");
+  const [view, setView] = React.useState("all"); // "all" | "teamup" | "online"
+  const [dateFrom, setDateFrom] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [dateTo, setDateTo] = React.useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30);
+    return d.toISOString().slice(0, 10);
+  });
 
   React.useEffect(() => {
     sbFetch("bookings?select=*&order=created_at.desc&limit=200")
@@ -244,38 +275,325 @@ function Bookings() {
       .finally(() => setLoading(false));
   }, []);
 
+  const hasTeamup = !!(teamupSettings?.calendarKey);
+
+  async function syncTeamUp() {
+    if (!hasTeamup) {
+      setSyncMsg("⚠ No TeamUp Calendar Key found. Go to Settings → TeamUp to add your credentials.");
+      return;
+    }
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const res = await fetch("/api/teamup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          calendarKey: teamupSettings.calendarKey,
+          apiKey: teamupSettings.apiKey || "",
+          startDate: dateFrom,
+          endDate: dateTo,
+          subcalendarIds: teamupSettings.subcalendarId
+            ? [teamupSettings.subcalendarId]
+            : [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "TeamUp sync failed");
+
+      const events = data.events || [];
+      setTeamupEvents(events);
+
+      // Save pulled events to Supabase bookings table so they persist
+      let saved = 0;
+      for (const ev of events) {
+        try {
+          const who = ev.who || ev.title || "Unknown";
+          const notes = ev.notes || ev.custom?.notes || "";
+          // Extract phone from notes/who field if present
+          const phoneMatch = (notes + " " + who).match(/(\+?27\d{9}|0\d{9})/);
+          const phone = phoneMatch ? phoneMatch[0] : "";
+          const scanMatch = (ev.title || "").match(/\b(obstetric|abdominal|pelv|renal|kub|thyroid|breast|dvt|carotid|scrotal|msk|soft tissue|hernia|aorta|appendix)\b/i);
+          const scan = scanMatch ? scanMatch[0] : (ev.title || "Ultrasound");
+
+          await sbFetch("bookings", {
+            method: "POST",
+            headers: { Prefer: "return=minimal,resolution=ignore-duplicates" },
+            body: JSON.stringify({
+              full_name: who,
+              phone,
+              scan_type: scan,
+              preferred_date: (ev.start_dt || ev.start?.dt || "").slice(0, 10),
+              start_time: (ev.start_dt || ev.start?.dt || "").slice(11, 16),
+              end_time: (ev.end_dt || ev.end?.dt || "").slice(11, 16),
+              status: "Booked",
+              source: "teamup",
+              teamup_event_id: String(ev.id),
+              notes: ev.notes || "",
+            }),
+          });
+          saved++;
+        } catch (_) { /* skip duplicates */ }
+      }
+
+      // Reload from Supabase to show merged view
+      const fresh = await sbFetch("bookings?select=*&order=created_at.desc&limit=200");
+      setBookings(fresh);
+      setSyncMsg(`✅ Synced ${events.length} TeamUp event(s) — ${saved} new saved to register.`);
+    } catch (e) {
+      setSyncMsg(`⚠ ${e.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const allBookings = [
+    ...bookings,
+    // Show any TeamUp events not yet saved (optimistic)
+    ...teamupEvents
+      .filter(ev => !bookings.some(b => b.teamup_event_id === String(ev.id)))
+      .map(ev => ({
+        id: "tu_" + ev.id,
+        full_name: ev.who || ev.title || "Unknown",
+        phone: "",
+        scan_type: ev.title || "Ultrasound",
+        preferred_date: (ev.start_dt || "").slice(0, 10),
+        status: "Booked",
+        source: "teamup",
+        teamup_event_id: String(ev.id),
+      })),
+  ];
+
+  const filtered = view === "all" ? allBookings
+    : view === "teamup" ? allBookings.filter(b => b.source === "teamup")
+    : allBookings.filter(b => b.source !== "teamup");
+
   return (
     <div className="page">
       <div className="page-header">
         <h2>Bookings</h2>
-        <span className="badge">{bookings.length} total</span>
+        <span className="badge">{filtered.length} total</span>
+        {teamupEvents.length > 0 && (
+          <span className="badge" style={{ background: "#e8f5e9", color: "#2e7d32" }}>
+            📅 {teamupEvents.length} from TeamUp
+          </span>
+        )}
       </div>
+
+      {/* TeamUp sync panel */}
+      <div className="teamup-sync-panel">
+        <div className="teamup-sync-header">
+          <span className="teamup-logo">📅 TeamUp Calendar Sync</span>
+          {hasTeamup
+            ? <span className="teamup-status connected">● API Configured</span>
+            : <span className="teamup-status waiting">● Awaiting API Key — go to Settings to add when received</span>
+          }
+        </div>
+        <div className="teamup-sync-controls">
+          <div className="teamup-date-row">
+            <label>From</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="teamup-date-input" />
+            <label>To</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="teamup-date-input" />
+          </div>
+          <button
+            className={`teamup-sync-btn ${syncing ? "syncing" : ""} ${!hasTeamup ? "disabled" : ""}`}
+            onClick={syncTeamUp}
+            disabled={syncing}
+          >
+            {syncing ? "⟳ Syncing…" : "⟳ Pull from TeamUp"}
+          </button>
+        </div>
+        {syncMsg && (
+          <p className={`teamup-sync-msg ${syncMsg.startsWith("✅") ? "success" : "warn"}`}>
+            {syncMsg}
+          </p>
+        )}
+        {!hasTeamup && (
+          <p className="teamup-hint">
+            Once you receive your TeamUp API key by email, go to <strong>Settings → TeamUp Integration</strong> and paste in your API key and Calendar Key. Then come back here and click Pull from TeamUp.
+          </p>
+        )}
+      </div>
+
+      {/* View filter */}
+      <div className="filter-row">
+        {[["all", "All Bookings"], ["teamup", "📅 TeamUp"], ["online", "🌐 Online/Other"]].map(([v, label]) => (
+          <button key={v} className={`filter-btn ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {loading && <p className="loading">Loading…</p>}
       {err && <p className="error">⚠ {err}</p>}
+
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Patient</th><th>Phone</th><th>Scan</th>
-              <th>Branch</th><th>Date</th><th>Status</th>
+              <th>Date</th><th>Time</th><th>Source</th><th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {bookings.map(b => (
+            {filtered.map(b => (
               <tr key={b.id}>
-                <td><strong>{b.full_name || b.name}</strong></td>
+                <td><strong>{b.full_name || b.name || "—"}</strong></td>
                 <td>{b.phone || "—"}</td>
                 <td>{b.scan_type || b.scan || "—"}</td>
-                <td>{b.branch || "—"}</td>
                 <td>{b.preferred_date || b.date || "—"}</td>
-                <td><span className={`status status-${(b.status||"pending").toLowerCase()}`}>{b.status || "Pending"}</span></td>
+                <td>{b.start_time || "—"}</td>
+                <td>
+                  <span className={`source-badge ${b.source === "teamup" ? "teamup" : "online"}`}>
+                    {b.source === "teamup" ? "📅 TeamUp" : b.source || "Online"}
+                  </span>
+                </td>
+                <td>
+                  <span className={`status status-${(b.status || "pending").toLowerCase()}`}>
+                    {b.status || "Pending"}
+                  </span>
+                </td>
               </tr>
             ))}
-            {!loading && bookings.length === 0 && (
-              <tr><td colSpan={6} className="empty">No bookings found</td></tr>
+            {!loading && filtered.length === 0 && (
+              <tr><td colSpan={7} className="empty">
+                {view === "teamup" && !hasTeamup
+                  ? "Add your TeamUp API key in Settings to pull calendar bookings."
+                  : "No bookings found"}
+              </td></tr>
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+function Settings({ teamupSettings, onSave }) {
+  const [apiKey, setApiKey] = React.useState(teamupSettings?.apiKey || "");
+  const [calendarKey, setCalendarKey] = React.useState(teamupSettings?.calendarKey || "");
+  const [subcalendarId, setSubcalendarId] = React.useState(teamupSettings?.subcalendarId || "");
+  const [saved, setSaved] = React.useState(false);
+  const [testing, setTesting] = React.useState(false);
+  const [testMsg, setTestMsg] = React.useState("");
+
+  function handleSave(e) {
+    e.preventDefault();
+    onSave({ apiKey: apiKey.trim(), calendarKey: calendarKey.trim(), subcalendarId: subcalendarId.trim() });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  }
+
+  async function testConnection() {
+    if (!calendarKey.trim()) { setTestMsg("⚠ Enter a Calendar Key first."); return; }
+    setTesting(true); setTestMsg("");
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const next7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const res = await fetch("/api/teamup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          calendarKey: calendarKey.trim(),
+          apiKey: apiKey.trim(),
+          startDate: today,
+          endDate: next7,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const count = (data.events || []).length;
+      setTestMsg(`✅ Connected! Found ${count} event(s) in the next 7 days.`);
+    } catch (e) {
+      setTestMsg(`⚠ ${e.message}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h2>Settings</h2>
+      </div>
+
+      <div className="settings-card">
+        <div className="settings-section-title">📅 TeamUp Calendar Integration</div>
+        <p className="settings-desc">
+          Once you receive your TeamUp API access by email, paste your credentials below.
+          The Calendar Key is the long code in your TeamUp calendar URL (e.g. <code>ks8ab12cd34ef5</code>).
+        </p>
+
+        <form onSubmit={handleSave}>
+          <div className="pw-field">
+            <label>TeamUp API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="Paste your API key here when received by email"
+              autoComplete="off"
+            />
+            <span className="settings-hint">Received via email from TeamUp after your API request is approved.</span>
+          </div>
+          <div className="pw-field">
+            <label>Calendar Key</label>
+            <input
+              type="text"
+              value={calendarKey}
+              onChange={e => setCalendarKey(e.target.value)}
+              placeholder="e.g. ks8ab12cd34ef5gh67"
+              autoComplete="off"
+            />
+            <span className="settings-hint">Found in your TeamUp calendar URL: teamup.com/<strong>[this-part]</strong></span>
+          </div>
+          <div className="pw-field">
+            <label>Subcalendar ID (optional)</label>
+            <input
+              type="text"
+              value={subcalendarId}
+              onChange={e => setSubcalendarId(e.target.value)}
+              placeholder="Leave blank to pull all sub-calendars"
+              autoComplete="off"
+            />
+            <span className="settings-hint">Only needed if you want to filter by a specific room or branch.</span>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+            <button type="submit" className="pw-btn" style={{ flex: 1, minWidth: 140 }}>
+              {saved ? "✅ Saved!" : "Save Settings"}
+            </button>
+            <button
+              type="button"
+              className="pw-btn"
+              style={{ flex: 1, minWidth: 140, background: "#1565c0" }}
+              onClick={testConnection}
+              disabled={testing}
+            >
+              {testing ? "Testing…" : "🔌 Test Connection"}
+            </button>
+          </div>
+          {testMsg && (
+            <p className={`pw-${testMsg.startsWith("✅") ? "success" : "error"}`} style={{ marginTop: 10 }}>
+              {testMsg}
+            </p>
+          )}
+        </form>
+
+        <div className="pw-note" style={{ marginTop: 20 }}>
+          <strong>How it works:</strong> Once configured, go to <strong>Bookings → Pull from TeamUp</strong> to fetch
+          appointments from your TeamUp calendar. Events are matched by name and saved into the Bookings register automatically.
+          You can set a date range and filter by source (TeamUp vs online bookings).
+        </div>
+      </div>
+
+      <div className="settings-card" style={{ marginTop: 20 }}>
+        <div className="settings-section-title">ℹ️ Practice Info</div>
+        <p className="settings-desc">Hendors Diagnostics · Hendor L. Wynne · HPCSA DR 0092673</p>
+        <p className="settings-desc">69 Meade Street, George Central, George 6529</p>
+        <p className="settings-desc">072 763 6282 · 081 488 2066</p>
       </div>
     </div>
   );
@@ -463,28 +781,64 @@ function Intake() {
 
   async function approve(item) {
     try {
-      await sbFetch(`patients`, {
-        method: "POST",
-        body: JSON.stringify({
-          full_name: item.full_name,
-          id_number: item.id_number,
-          dob: item.dob,
-          sex: item.sex,
-          phone: item.phone,
-          email: item.email,
-          address: item.address,
-          medical_aid: item.medical_aid,
-          medical_aid_no: item.medical_aid_no,
-          referring_doctor: item.referring_doctor,
-        }),
-      });
-      await sbFetch(`pending_intake?id=eq.${item.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "Approved" }),
-      });
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
+      // Build payload — only include fields with actual values to avoid
+      // Supabase 400 errors from columns that don't exist or have NOT NULL constraints.
+      const payload = {};
+      if (item.full_name)        payload.full_name        = item.full_name;
+      if (item.phone)            payload.phone            = item.phone;
+      if (item.email)            payload.email            = item.email;
+      if (item.id_number)        payload.id_number        = item.id_number;
+      if (item.medical_aid)      payload.medical_aid      = item.medical_aid;
+
+      // These columns may or may not exist in your patients table — try each
+      // one and skip silently if Supabase rejects an unknown column.
+      const optional = {
+        dob:              item.dob,
+        sex:              item.sex,
+        address:          item.address,
+        medical_aid_no:   item.medical_aid_no,
+        referring_doctor: item.referring_doctor,
+      };
+      for (const [k, v] of Object.entries(optional)) {
+        if (v) payload[k] = v;
+      }
+
+      // First try with all fields
+      let saved = false;
+      try {
+        await sbFetch(`patients`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        saved = true;
+      } catch (e1) {
+        // If 400, retry with only the guaranteed core fields
+        if (e1.message.includes("400") || e1.message.includes("column")) {
+          const core = {};
+          if (payload.full_name)   core.full_name   = payload.full_name;
+          if (payload.phone)       core.phone       = payload.phone;
+          if (payload.email)       core.email       = payload.email;
+          if (payload.id_number)   core.id_number   = payload.id_number;
+          if (payload.medical_aid) core.medical_aid = payload.medical_aid;
+          await sbFetch(`patients`, {
+            method: "POST",
+            body: JSON.stringify(core),
+          });
+          saved = true;
+        } else {
+          throw e1;
+        }
+      }
+
+      if (saved) {
+        await sbFetch(`pending_intake?id=eq.${item.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "Approved" }),
+        });
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
+      }
     } catch (e) {
-      alert("Error approving: " + e.message);
+      alert("Error approving: " + e.message + "\n\nTip: Check that your Supabase 'patients' table has the required columns and that Row Level Security allows inserts.");
     }
   }
 

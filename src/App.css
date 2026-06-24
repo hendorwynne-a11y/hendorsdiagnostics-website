@@ -507,3 +507,83 @@ td strong { color: #0a1628; font-weight: 600; }
 [data-theme="dark"] .transcribe-hint { color: #4a6070; }
 [data-theme="dark"] .filter-btn { background: var(--surface); border-color: var(--border); color: #7a90a8; }
 [data-theme="dark"] .filter-btn.active { background: #1e3a5f; border-color: #1e3a5f; color: #fff; }
+
+/* ── TEAMUP SYNC PANEL ─────────────────────────────────────────────────────── */
+.teamup-sync-panel {
+  background: #fff; border-radius: 12px; padding: 18px 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07); margin-bottom: 20px;
+  border-left: 4px solid #2d9cdb;
+}
+.teamup-sync-header {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.teamup-logo { font-size: 15px; font-weight: 700; color: #062D5C; }
+.teamup-status { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+.teamup-status.connected { background: #e8f5e9; color: #2e7d32; }
+.teamup-status.waiting { background: #fff8e1; color: #f57c00; }
+
+.teamup-sync-controls {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.teamup-date-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.teamup-date-row label { font-size: 12px; font-weight: 700; color: #566575; }
+.teamup-date-input {
+  padding: 7px 10px; border: 1.5px solid #dde3ec; border-radius: 7px;
+  font-size: 13px; outline: none; color: #0a1628;
+}
+.teamup-date-input:focus { border-color: #2d9cdb; }
+
+.teamup-sync-btn {
+  padding: 9px 20px; background: #1e3a5f; color: #fff;
+  border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: background .15s; white-space: nowrap;
+}
+.teamup-sync-btn:hover:not(.disabled) { background: #2d9cdb; }
+.teamup-sync-btn.syncing { background: #2d9cdb; cursor: wait; animation: pulse-sync 1s infinite; }
+.teamup-sync-btn.disabled { background: #9aa5b4; cursor: not-allowed; }
+@keyframes pulse-sync { 0%,100%{opacity:1} 50%{opacity:.7} }
+
+.teamup-sync-msg { font-size: 13px; font-weight: 600; margin-top: 10px; padding: 8px 12px; border-radius: 7px; }
+.teamup-sync-msg.success { background: #e8f5e9; color: #2e7d32; }
+.teamup-sync-msg.warn { background: #fff8e1; color: #e65100; }
+
+.teamup-hint {
+  font-size: 12px; color: #566575; margin-top: 10px; line-height: 1.6;
+  padding: 8px 12px; background: #f8fafc; border-radius: 7px;
+}
+
+/* ── SOURCE BADGE ──────────────────────────────────────────────────────────── */
+.source-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+}
+.source-badge.teamup { background: #e3f2fd; color: #1565c0; }
+.source-badge.online { background: #f3e5f5; color: #6a1b9a; }
+
+/* ── SETTINGS PAGE ─────────────────────────────────────────────────────────── */
+.settings-card {
+  background: #fff; border-radius: 12px; padding: 24px 28px;
+  max-width: 560px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+.settings-section-title {
+  font-size: 15px; font-weight: 700; color: #062D5C;
+  margin-bottom: 10px; padding-bottom: 10px;
+  border-bottom: 2px solid #e8f0fb;
+}
+.settings-desc { font-size: 13px; color: #566575; margin-bottom: 6px; line-height: 1.6; }
+.settings-hint { display: block; font-size: 11px; color: #8fa3bc; margin-top: 3px; }
+.settings-card code { background: #edf0f5; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+/* ── DARK MODE ADDITIONS ───────────────────────────────────────────────────── */
+[data-theme="dark"] .teamup-sync-panel { background: var(--surface); border-left-color: #2d9cdb; }
+[data-theme="dark"] .teamup-logo { color: #e2eaf4; }
+[data-theme="dark"] .teamup-date-input { background: var(--surface2); border-color: var(--border); color: var(--text); }
+[data-theme="dark"] .teamup-hint { background: var(--surface2); color: #7a90a8; }
+[data-theme="dark"] .settings-card { background: var(--surface); }
+[data-theme="dark"] .settings-section-title { color: #7ab8e8; border-bottom-color: var(--border); }
+[data-theme="dark"] .settings-desc { color: #7a90a8; }
+[data-theme="dark"] .settings-hint { color: #4a6070; }
+[data-theme="dark"] .settings-card code { background: var(--surface2); }
