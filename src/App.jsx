@@ -171,6 +171,7 @@ function Shell({ user, onLogout, page, setPage, children }) {
 
   return (
     <div className="shell">
+      {/* Top header — matches desktop app style */}
       <header className="top-header">
         <div className="top-header-logo">
           <img src={LOGO_DATA_URL} alt="Hendors Diagnostics" className="top-logo-img" />
@@ -191,6 +192,7 @@ function Shell({ user, onLogout, page, setPage, children }) {
         </div>
       </header>
 
+      {/* Nav bar — matches desktop app navy bar */}
       <nav className="top-nav">
         {nav.filter(n => !n.adminOnly || user.role === "admin").map(n => (
           <button
@@ -309,7 +311,7 @@ function Bookings({ teamupSettings }) {
   const [syncing, setSyncing] = React.useState(false);
   const [err, setErr] = React.useState("");
   const [syncMsg, setSyncMsg] = React.useState("");
-  const [view, setView] = React.useState("all");
+  const [view, setView] = React.useState("all"); // "all" | "teamup" | "online"
   const [dateFrom, setDateFrom] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [dateTo, setDateTo] = React.useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 30);
@@ -352,11 +354,13 @@ function Bookings({ teamupSettings }) {
       const events = data.events || [];
       setTeamupEvents(events);
 
+      // Save pulled events to Supabase bookings table so they persist
       let saved = 0;
       for (const ev of events) {
         try {
           const who = ev.who || ev.title || "Unknown";
           const notes = ev.notes || ev.custom?.notes || "";
+          // Extract phone from notes/who field if present
           const phoneMatch = (notes + " " + who).match(/(\+?27\d{9}|0\d{9})/);
           const phone = phoneMatch ? phoneMatch[0] : "";
           const scanMatch = (ev.title || "").match(/\b(obstetric|abdominal|pelv|renal|kub|thyroid|breast|dvt|carotid|scrotal|msk|soft tissue|hernia|aorta|appendix)\b/i);
@@ -382,6 +386,7 @@ function Bookings({ teamupSettings }) {
         } catch (_) { /* skip duplicates */ }
       }
 
+      // Reload from Supabase to show merged view
       const fresh = await sbFetch("bookings?select=*&order=created_at.desc&limit=200");
       setBookings(fresh);
       setSyncMsg(`✅ Synced ${events.length} TeamUp event(s) — ${saved} new saved to register.`);
@@ -394,6 +399,7 @@ function Bookings({ teamupSettings }) {
 
   const allBookings = [
     ...bookings,
+    // Show any TeamUp events not yet saved (optimistic)
     ...teamupEvents
       .filter(ev => !bookings.some(b => b.teamup_event_id === String(ev.id)))
       .map(ev => ({
@@ -424,6 +430,7 @@ function Bookings({ teamupSettings }) {
         )}
       </div>
 
+      {/* TeamUp sync panel */}
       <div className="teamup-sync-panel">
         <div className="teamup-sync-header">
           <span className="teamup-logo">📅 TeamUp Calendar Sync</span>
@@ -459,6 +466,7 @@ function Bookings({ teamupSettings }) {
         )}
       </div>
 
+      {/* View filter */}
       <div className="filter-row">
         {[["all", "All Bookings"], ["teamup", "📅 TeamUp"], ["online", "🌐 Online/Other"]].map(([v, label]) => (
           <button key={v} className={`filter-btn ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
@@ -847,6 +855,7 @@ function Intake({ onApproveAndOpen, user }) {
       });
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
 
+      // Auto-navigate to Report Studio with patient pre-filled
       onApproveAndOpen({
         patient_name:     item.full_name || "",
         patient_id:       item.id_number || "",
@@ -900,6 +909,7 @@ function Intake({ onApproveAndOpen, user }) {
         )}
       </div>
 
+      {/* Toolbar */}
       <div className="intake-toolbar">
         <button
           className={`filter-btn ${showApproved ? "active" : ""}`}
@@ -1012,3 +1022,4 @@ function ChangePassword({ user, onPasswordChanged }) {
     </div>
   );
 }
+
