@@ -40,7 +40,7 @@ export default function LandingPage({ onStaffLogin }) {
             you can <em>trust.</em>
           </h1>
           <p className="lp-subhead">
-            I'm Hendor Wynne — a medical sonographer with over 15 years of experience
+            I'm Hendor Wynne — a medical sonographer with over 20 years of experience
             serving patients across the Garden Route. Every scan is performed and
             reported by me personally, with care and clarity.
           </p>
@@ -76,7 +76,7 @@ export default function LandingPage({ onStaffLogin }) {
 
       {/* ── TRUST BAR ── */}
       <div className="lp-trust-bar">
-        <span>✓ 15+ years experience</span>
+        <span>✓ 20+ years experience</span>
         <span className="lp-sep">·</span>
         <span>✓ Every scan done by Hendor personally</span>
         <span className="lp-sep">·</span>
