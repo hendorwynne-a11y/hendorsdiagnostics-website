@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import "./App.css";
 import { LOGO_DATA_URL } from "./brandAssets.js";
 
-// ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE"
 
@@ -29,20 +28,32 @@ async function sbFetch(path, opts = {}) {
   return text ? JSON.parse(text) : [];
 }
 
-// ── Staff credentials (simple — upgrade to Supabase Auth later) ──────────────
 const STAFF = {
   hendor: { password: "hd1wynne", role: "admin", name: "Hendor Wynne" },
   "de koker": { password: "hd2dekoker", role: "reception", name: "M. De Koker" },
 };
 
-// ── Colour palette ───────────────────────────────────────────────────────────
-// Deep navy #0a1628, steel blue #1e3a5f, accent #2d9cdb, white, light grey #f4f7fb
+// ── PRICE LIST ────────────────────────────────────────────────────────────────
+const EXAM_PRICES = [
+  { code: "5106", name: "Before 10-week obstetric scan",         cash: 900,  aid: 1200  },
+  { code: "3615", name: "10-20 weeks + NT Scan",                 cash: 900,  aid: 1300  },
+  { code: "3617", name: "20-24 weeks + Detail scan",             cash: 1300, aid: 1600  },
+  { code: "5107", name: "After 24 weeks obstetric scan",         cash: 900,  aid: 1300  },
+  { code: "3618", name: "Pelvic – Trans Abdominal (Gynae)",      cash: 980,  aid: 1300  },
+  { code: "5100", name: "Pelvic – Trans Vaginal (Gynae)",        cash: 980,  aid: 1250  },
+  { code: "3627", name: "Abdominal Ultrasound",                  cash: 1300, aid: 1452.79},
+  { code: "3629", name: "HD – Thyroid / Breast / Testes / MSK", cash: 980,  aid: 1300  },
+  { code: "5114", name: "DVT Scan + Doppler",                    cash: 980,  aid: 1900  },
+  { code: "3628", name: "Renal Track",                           cash: 1000, aid: 1250  },
+  { code: "5101", name: "Pleural Space",                         cash: 980,  aid: 1200  },
+  { code: "TV+TA", name: "Trans Vaginal + Trans Abdominal Gynae",cash: 1600, aid: 1900  },
+  { code: "3620", name: "Echo + Doppler Colour Mapping",         cash: null, aid: 2250  },
+  { code: "3622", name: "Carotid Doppler",                       cash: 1600, aid: null  },
+];
 
-// ── TeamUp settings helpers ───────────────────────────────────────────────────
 function loadTeamUpSettings() {
-  try {
-    return JSON.parse(localStorage.getItem("hd_teamup_settings") || "{}");
-  } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem("hd_teamup_settings") || "{}"); }
+  catch { return {}; }
 }
 function saveTeamUpSettings(s) {
   localStorage.setItem("hd_teamup_settings", JSON.stringify(s));
@@ -54,6 +65,8 @@ export default function App() {
   const [page, setPage] = useState("patients");
   const [teamupSettings, setTeamupSettings] = React.useState(loadTeamUpSettings);
   const [prefillPatient, setPrefillPatient] = React.useState(null);
+  const [activeScans, setActiveScans] = React.useState({}); // patientId -> startTime
+  const [billingPatient, setBillingPatient] = React.useState(null); // patient for billing modal
 
   function updateTeamupSettings(newSettings) {
     setTeamupSettings(newSettings);
@@ -66,31 +79,281 @@ export default function App() {
   }
 
   function startScan(patientData) {
+    // Mark scan as active, open billing modal first
+    setActiveScans(prev => ({ ...prev, [patientData.patient_id || patientData.patient_name]: Date.now() }));
+    setBillingPatient(patientData);
+  }
+
+  function stopScan(patientData) {
+    setActiveScans(prev => {
+      const next = { ...prev };
+      delete next[patientData.patient_id || patientData.patient_name];
+      return next;
+    });
     setPrefillPatient(patientData);
     setPage("studio");
   }
 
-  // Show public landing page if not logged in
   if (!user) {
-    if (!showLogin) {
-      return <LandingPage onStaffLogin={() => setShowLogin(true)} />;
-    }
+    if (!showLogin) return <LandingPage onStaffLogin={() => setShowLogin(true)} />;
     return <Login onLogin={setUser} onBack={() => setShowLogin(false)} />;
   }
 
   return (
-    <Shell user={user} onLogout={() => { setUser(null); setShowLogin(false); }} page={page} setPage={setPage}>
-      {page === "patients" && <Patients onStartScan={startScan} user={user} />}
-      {page === "bookings" && <Bookings teamupSettings={teamupSettings} />}
-      {page === "billing" && <Billing />}
-      {page === "reports" && <Reports user={user} />}
-      {page === "intake" && <Intake onApproveAndOpen={approveAndOpen} user={user} />}
-      {page === "studio" && <ReportStudio supabaseKey={SUPABASE_ANON_KEY} prefillPatient={prefillPatient} onPrefillUsed={() => setPrefillPatient(null)} />}
-      {page === "settings" && <Settings teamupSettings={teamupSettings} onSave={updateTeamupSettings} />}
-      {page === "password" && <ChangePassword user={user} onPasswordChanged={(newPwd) => {
-        STAFF[user.username].password = newPwd;
-      }} />}
-    </Shell>
+    <>
+      <Shell user={user} onLogout={() => { setUser(null); setShowLogin(false); }} page={page} setPage={setPage}>
+        {page === "patients" && (
+          <Patients
+            onStartScan={startScan}
+            onStopScan={stopScan}
+            activeScans={activeScans}
+            user={user}
+          />
+        )}
+        {page === "bookings" && <Bookings teamupSettings={teamupSettings} />}
+        {page === "billing" && <Billing />}
+        {page === "reports" && <Reports user={user} />}
+        {page === "intake" && <Intake onApproveAndOpen={approveAndOpen} user={user} />}
+        {page === "studio" && (
+          <ReportStudio
+            supabaseKey={SUPABASE_ANON_KEY}
+            prefillPatient={prefillPatient}
+            onPrefillUsed={() => setPrefillPatient(null)}
+          />
+        )}
+        {page === "settings" && <Settings teamupSettings={teamupSettings} onSave={updateTeamupSettings} />}
+        {page === "password" && <ChangePassword user={user} onPasswordChanged={(newPwd) => {
+          STAFF[user.username].password = newPwd;
+        }} />}
+      </Shell>
+
+      {/* ── BILLING MODAL ── */}
+      {billingPatient && (
+        <BillingModal
+          patient={billingPatient}
+          onClose={() => setBillingPatient(null)}
+          onProceedToScan={() => { setBillingPatient(null); }}
+        />
+      )}
+    </>
+  );
+}
+
+// ── BILLING MODAL ─────────────────────────────────────────────────────────────
+function BillingModal({ patient, onClose, onProceedToScan }) {
+  const [selectedExam, setSelectedExam] = React.useState("");
+  const [payType, setPayType] = React.useState("cash");
+  const [paid, setPaid] = React.useState("");
+  const [saved, setSaved] = React.useState(false);
+
+  const exam = EXAM_PRICES.find(e => e.name === selectedExam);
+  const price = exam ? (payType === "cash" ? exam.cash : exam.aid) : null;
+  const change = paid && price ? parseFloat(paid) - price : null;
+
+  async function saveAndProceed() {
+    if (!exam) { alert("Please select an exam first."); return; }
+    try {
+      await sbFetch("hd_billing_queue", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          patient_name: patient.patient_name || patient.full_name,
+          exam_name: exam.name,
+          exam_code: exam.code,
+          amount_due: price,
+          amount_paid: parseFloat(paid) || 0,
+          payment_type: payType,
+          status: parseFloat(paid) >= price ? "Paid" : paid ? "Partial" : "Pending",
+        }),
+      });
+    } catch (e) {
+      console.warn("Billing save failed:", e.message);
+    }
+    setSaved(true);
+    setTimeout(() => { onProceedToScan(); }, 800);
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="billing-modal">
+        <div className="billing-modal-header">
+          <div>
+            <h2>💳 Billing — {patient.patient_name || patient.full_name}</h2>
+            <p className="billing-modal-sub">Select exam and payment type to calculate what patient must pay at reception</p>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="billing-modal-body">
+          {/* Exam selector */}
+          <div className="billing-field">
+            <label>Examination performed</label>
+            <select value={selectedExam} onChange={e => setSelectedExam(e.target.value)} className="billing-select">
+              <option value="">— Select exam —</option>
+              {EXAM_PRICES.map(e => (
+                <option key={e.code} value={e.name}>{e.name} [{e.code}]</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Payment type */}
+          <div className="billing-field">
+            <label>Payment type</label>
+            <div className="billing-pay-row">
+              <button
+                className={`billing-pay-btn ${payType === "cash" ? "active" : ""}`}
+                onClick={() => setPayType("cash")}
+              >💵 Cash / Private</button>
+              <button
+                className={`billing-pay-btn ${payType === "aid" ? "active" : ""}`}
+                onClick={() => setPayType("aid")}
+              >🏥 Medical Aid</button>
+            </div>
+          </div>
+
+          {/* Price display */}
+          {exam && (
+            <div className="billing-price-display">
+              <div className="billing-price-box">
+                <span className="billing-price-label">Amount due</span>
+                <span className="billing-price-amount">
+                  {price != null ? `R ${price.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}` : "N/A"}
+                </span>
+                <span className="billing-price-code">Code: {exam.code}</span>
+              </div>
+              <div className="billing-prices-both">
+                <span>Cash: {exam.cash != null ? `R ${exam.cash.toFixed(2)}` : "N/A"}</span>
+                <span>Medical Aid: {exam.aid != null ? `R ${exam.aid.toFixed(2)}` : "N/A"}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Cash received */}
+          {price != null && (
+            <div className="billing-field">
+              <label>Cash received from patient (optional)</label>
+              <input
+                type="number"
+                className="billing-input"
+                placeholder={`e.g. ${price}`}
+                value={paid}
+                onChange={e => setPaid(e.target.value)}
+              />
+              {change !== null && (
+                <div className={`billing-change ${change >= 0 ? "positive" : "negative"}`}>
+                  {change >= 0
+                    ? `✓ Change to give back: R ${change.toFixed(2)}`
+                    : `⚠ Still owes: R ${Math.abs(change).toFixed(2)}`}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Exam code reference table */}
+          <details className="billing-price-ref">
+            <summary>📋 Full price list reference</summary>
+            <table className="billing-ref-table">
+              <thead><tr><th>Examination</th><th>Code</th><th>Cash</th><th>Med Aid</th></tr></thead>
+              <tbody>
+                {EXAM_PRICES.map(e => (
+                  <tr key={e.code} className={selectedExam === e.name ? "billing-ref-active" : ""}>
+                    <td>{e.name}</td>
+                    <td className="mono">{e.code}</td>
+                    <td>{e.cash != null ? `R ${e.cash.toFixed(2)}` : "—"}</td>
+                    <td>{e.aid != null ? `R ${e.aid.toFixed(2)}` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        </div>
+
+        <div className="billing-modal-footer">
+          <button className="billing-skip-btn" onClick={onProceedToScan}>Skip billing</button>
+          <button
+            className={`billing-save-btn ${saved ? "saved" : ""}`}
+            onClick={saveAndProceed}
+            disabled={saved}
+          >
+            {saved ? "✅ Saved!" : "💾 Save & Continue"}
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        .modal-backdrop {
+          position: fixed; inset: 0; z-index: 9999;
+          background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .billing-modal {
+          background: #1a2535; border: 1px solid #2d3f55; border-radius: 16px;
+          width: 100%; max-width: 620px; max-height: 90vh;
+          display: flex; flex-direction: column; overflow: hidden;
+          box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+        }
+        .billing-modal-header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          padding: 24px 24px 16px; border-bottom: 1px solid #2d3f55;
+        }
+        .billing-modal-header h2 { font-size: 18px; color: #e8f0fe; margin-bottom: 4px; }
+        .billing-modal-sub { font-size: 12px; color: #8fa3bc; }
+        .modal-close {
+          background: none; border: none; color: #8fa3bc; font-size: 18px;
+          cursor: pointer; padding: 4px 8px; border-radius: 6px;
+        }
+        .modal-close:hover { background: #2d3f55; color: #fff; }
+        .billing-modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 18px; }
+        .billing-field { display: flex; flex-direction: column; gap: 6px; }
+        .billing-field label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #8fa3bc; }
+        .billing-select, .billing-input {
+          background: #111c2d; border: 1px solid #2d3f55; color: #e8f0fe;
+          border-radius: 8px; padding: 10px 12px; font-size: 14px; width: 100%;
+        }
+        .billing-select:focus, .billing-input:focus { outline: none; border-color: #2d9cdb; }
+        .billing-pay-row { display: flex; gap: 10px; }
+        .billing-pay-btn {
+          flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600;
+          cursor: pointer; border: 2px solid #2d3f55; background: #111c2d; color: #8fa3bc;
+          transition: all 0.15s;
+        }
+        .billing-pay-btn.active { border-color: #2d9cdb; background: #162a3f; color: #2d9cdb; }
+        .billing-price-display {
+          background: #111c2d; border: 2px solid #2d9cdb; border-radius: 12px; padding: 20px;
+          display: flex; flex-direction: column; gap: 10px;
+        }
+        .billing-price-box { display: flex; flex-direction: column; gap: 4px; }
+        .billing-price-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #8fa3bc; }
+        .billing-price-amount { font-size: 36px; font-weight: 800; color: #2d9cdb; line-height: 1; }
+        .billing-price-code { font-size: 11px; color: #5a7a9a; }
+        .billing-prices-both { display: flex; gap: 16px; font-size: 12px; color: #5a7a9a; padding-top: 8px; border-top: 1px solid #2d3f55; }
+        .billing-change { margin-top: 6px; padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+        .billing-change.positive { background: #0d2d1a; color: #4ade80; border: 1px solid #166534; }
+        .billing-change.negative { background: #2d1a0d; color: #f97316; border: 1px solid #7c2d12; }
+        .billing-price-ref { margin-top: 4px; }
+        .billing-price-ref summary { font-size: 12px; color: #8fa3bc; cursor: pointer; padding: 6px 0; }
+        .billing-ref-table { width: 100%; margin-top: 10px; font-size: 12px; border-collapse: collapse; }
+        .billing-ref-table th { text-align: left; padding: 6px 8px; color: #8fa3bc; border-bottom: 1px solid #2d3f55; }
+        .billing-ref-table td { padding: 6px 8px; color: #c8d8e8; border-bottom: 1px solid #1a2535; }
+        .billing-ref-active td { background: #162a3f; color: #2d9cdb; }
+        .billing-modal-footer {
+          display: flex; justify-content: flex-end; gap: 10px;
+          padding: 16px 24px; border-top: 1px solid #2d3f55;
+        }
+        .billing-skip-btn {
+          background: none; border: 1px solid #2d3f55; color: #8fa3bc;
+          padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px;
+        }
+        .billing-skip-btn:hover { border-color: #8fa3bc; }
+        .billing-save-btn {
+          background: #1a7a4a; color: #fff; border: none;
+          padding: 10px 22px; border-radius: 8px; cursor: pointer;
+          font-size: 14px; font-weight: 600; transition: background 0.15s;
+        }
+        .billing-save-btn:hover { background: #15623c; }
+        .billing-save-btn.saved { background: #0d4a2a; }
+      `}</style>
+    </div>
   );
 }
 
@@ -117,31 +380,13 @@ function Login({ onLogin, onBack }) {
         <h1>Hendors Diagnostics</h1>
         <p className="login-sub">Staff Portal</p>
         <form onSubmit={handleLogin}>
-          <input
-            placeholder="Username"
-            value={u}
-            onChange={e => { setU(e.target.value); setErr(""); }}
-            autoComplete="username"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={p}
-            onChange={e => { setP(e.target.value); setErr(""); }}
-            autoComplete="current-password"
-          />
+          <input placeholder="Username" value={u} onChange={e => { setU(e.target.value); setErr(""); }} autoComplete="username" />
+          <input type="password" placeholder="Password" value={p} onChange={e => { setP(e.target.value); setErr(""); }} autoComplete="current-password" />
           {err && <p className="login-err">{err}</p>}
           <button type="submit">Sign in</button>
         </form>
         {onBack && (
-          <button
-            onClick={onBack}
-            style={{
-              marginTop: 16, background: "none", border: "none",
-              color: "#8fa3bc", fontSize: 13, cursor: "pointer",
-              textDecoration: "underline"
-            }}
-          >
+          <button onClick={onBack} style={{ marginTop: 16, background: "none", border: "none", color: "#8fa3bc", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
             ← Back to website
           </button>
         )}
@@ -153,11 +398,11 @@ function Login({ onLogin, onBack }) {
 // ── SHELL ─────────────────────────────────────────────────────────────────────
 function Shell({ user, onLogout, page, setPage, children }) {
   const [dark, setDark] = React.useState(() => localStorage.getItem('hd_theme') === 'dark');
-
   React.useEffect(() => {
     document.body.setAttribute('data-theme', dark ? 'dark' : 'light');
     localStorage.setItem('hd_theme', dark ? 'dark' : 'light');
   }, [dark]);
+
   const nav = [
     { id: "patients", label: "Patients", icon: "👤" },
     { id: "bookings", label: "Bookings", icon: "📅" },
@@ -171,7 +416,6 @@ function Shell({ user, onLogout, page, setPage, children }) {
 
   return (
     <div className="shell">
-      {/* Top header — matches desktop app style */}
       <header className="top-header">
         <div className="top-header-logo">
           <img src={LOGO_DATA_URL} alt="Hendors Diagnostics" className="top-logo-img" />
@@ -185,34 +429,25 @@ function Shell({ user, onLogout, page, setPage, children }) {
           <span className="top-user-label">Working user</span>
           <span className="top-user-name">{user.name}</span>
           <span className="top-user-role">{user.role === "admin" ? "Admin" : "Reception"}</span>
-          <button className="theme-toggle-btn" onClick={() => setDark(d => !d)} title="Toggle dark/light mode">
-            {dark ? "☀️ Light" : "🌙 Dark"}
-          </button>
+          <button className="theme-toggle-btn" onClick={() => setDark(d => !d)}>{dark ? "☀️ Light" : "🌙 Dark"}</button>
           <button className="top-logout-btn" onClick={onLogout}>Sign out</button>
         </div>
       </header>
-
-      {/* Nav bar — matches desktop app navy bar */}
       <nav className="top-nav">
         {nav.filter(n => !n.adminOnly || user.role === "admin").map(n => (
-          <button
-            key={n.id}
-            className={`top-nav-item ${page === n.id ? "active" : ""}`}
-            onClick={() => setPage(n.id)}
-          >
+          <button key={n.id} className={`top-nav-item ${page === n.id ? "active" : ""}`} onClick={() => setPage(n.id)}>
             <span className="nav-icon">{n.icon}</span>
             <span>{n.label}</span>
           </button>
         ))}
       </nav>
-
       <main className="main-content-new">{children}</main>
     </div>
   );
 }
 
 // ── PATIENTS ──────────────────────────────────────────────────────────────────
-function Patients({ onStartScan, user }) {
+function Patients({ onStartScan, onStopScan, activeScans, user }) {
   const isAdmin = user?.role === "admin";
   const [patients, setPatients] = React.useState([]);
   const [search, setSearch] = React.useState("");
@@ -232,9 +467,7 @@ function Patients({ onStartScan, user }) {
     try {
       await sbFetch(`patients?id=eq.${p.id}`, { method: "DELETE" });
       setPatients(prev => prev.filter(x => x.id !== p.id));
-    } catch(e) {
-      alert("Delete failed: " + e.message);
-    }
+    } catch(e) { alert("Delete failed: " + e.message); }
   }
 
   const filtered = patients.filter(p =>
@@ -247,58 +480,92 @@ function Patients({ onStartScan, user }) {
       <div className="page-header">
         <h2>Patient Register</h2>
         <span className="badge">{patients.length} patients</span>
+        {Object.keys(activeScans).length > 0 && (
+          <span className="badge" style={{ background: "#fef3c7", color: "#92400e" }}>
+            🔴 {Object.keys(activeScans).length} scan(s) in progress
+          </span>
+        )}
       </div>
-      <input
-        className="search-input"
-        placeholder="Search by name, ID, phone…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
+      <input className="search-input" placeholder="Search by name, ID, phone…" value={search} onChange={e => setSearch(e.target.value)} />
       {loading && <p className="loading">Loading…</p>}
       {err && <p className="error">⚠ {err}</p>}
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Name</th><th>ID File</th><th>Phone</th>
-              <th>Gender</th><th>DOB</th><th>Actions</th>
+              <th>Name</th><th>ID File</th><th>Phone</th><th>Gender</th><th>DOB</th><th>Status</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map(p => (
-              <tr key={p.id}>
-                <td><strong>{p.patient_name || p.full_name}</strong></td>
-                <td>{p.patient_id_file || "—"}</td>
-                <td>{p.phone || "—"}</td>
-                <td>{p.gender || "—"}</td>
-                <td>{p.dob || "—"}</td>
-                <td className="actions-cell">
-                  <button
-                    className="act-btn start-scan"
-                    title="Start scan — opens Report Studio with this patient"
-                    onClick={() => onStartScan({
-                      patient_name:     p.patient_name || p.full_name || "",
-                      patient_id:       p.patient_id_file || "",
-                      dob:              p.dob || "",
-                      age:              p.age || "",
-                      gender:           p.gender || "",
-                      phone:            p.phone || "",
-                      medical_aid:      p.medical_aid || "",
-                      referring_doctor: p.referring_doctor || p.physician || "",
-                    })}
-                  >▶ Start</button>
-                  {isAdmin && (
-                    <button className="act-btn delete" onClick={() => deletePatient(p)} title="Delete patient">🗑️</button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {filtered.map(p => {
+              const key = p.patient_id_file || p.patient_name || p.full_name;
+              const isActive = !!activeScans[key];
+              return (
+                <tr key={p.id} className={isActive ? "row-scanning" : ""}>
+                  <td><strong>{p.patient_name || p.full_name}</strong></td>
+                  <td>{p.patient_id_file || "—"}</td>
+                  <td>{p.phone || "—"}</td>
+                  <td>{p.gender || "—"}</td>
+                  <td>{p.dob || "—"}</td>
+                  <td>
+                    {isActive
+                      ? <span className="scan-status-badge scanning">🔴 Scanning</span>
+                      : <span className="scan-status-badge ready">Ready</span>
+                    }
+                  </td>
+                  <td className="actions-cell">
+                    {!isActive ? (
+                      <button
+                        className="act-btn start-scan"
+                        title="Start scan — opens billing window then Report Studio"
+                        onClick={() => onStartScan({
+                          patient_name:     p.patient_name || p.full_name || "",
+                          patient_id:       p.patient_id_file || "",
+                          dob:              p.dob || "",
+                          age:              p.age || "",
+                          gender:           p.gender || "",
+                          phone:            p.phone || "",
+                          medical_aid:      p.medical_aid || "",
+                          referring_doctor: p.referring_doctor || p.physician || "",
+                        })}
+                      >▶ Start</button>
+                    ) : (
+                      <button
+                        className="act-btn stop-scan"
+                        title="Stop scan — opens Report Studio"
+                        onClick={() => onStopScan({
+                          patient_name:     p.patient_name || p.full_name || "",
+                          patient_id:       p.patient_id_file || "",
+                          dob:              p.dob || "",
+                          age:              p.age || "",
+                          gender:           p.gender || "",
+                          phone:            p.phone || "",
+                          medical_aid:      p.medical_aid || "",
+                          referring_doctor: p.referring_doctor || p.physician || "",
+                        })}
+                      >⏹ Stop → Report</button>
+                    )}
+                    {isAdmin && (
+                      <button className="act-btn delete" onClick={() => deletePatient(p)} title="Delete patient">🗑️</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="empty">No patients found</td></tr>
+              <tr><td colSpan={7} className="empty">No patients found</td></tr>
             )}
           </tbody>
         </table>
       </div>
+      <style>{`
+        .row-scanning { background: rgba(234,179,8,0.06) !important; }
+        .scan-status-badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
+        .scan-status-badge.scanning { background: #fef3c7; color: #92400e; }
+        .scan-status-badge.ready { background: #f0fdf4; color: #166534; }
+        .act-btn.stop-scan { background: #dc2626; color: #fff; border: none; }
+        .act-btn.stop-scan:hover { background: #b91c1c; }
+      `}</style>
     </div>
   );
 }
@@ -311,133 +578,62 @@ function Bookings({ teamupSettings }) {
   const [syncing, setSyncing] = React.useState(false);
   const [err, setErr] = React.useState("");
   const [syncMsg, setSyncMsg] = React.useState("");
-  const [view, setView] = React.useState("all"); // "all" | "teamup" | "online"
+  const [view, setView] = React.useState("all");
   const [dateFrom, setDateFrom] = React.useState(() => new Date().toISOString().slice(0, 10));
-  const [dateTo, setDateTo] = React.useState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 30);
-    return d.toISOString().slice(0, 10);
-  });
+  const [dateTo, setDateTo] = React.useState(() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); });
 
   React.useEffect(() => {
     sbFetch("bookings?select=*&order=created_at.desc&limit=200")
-      .then(setBookings)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .then(setBookings).catch(e => setErr(e.message)).finally(() => setLoading(false));
   }, []);
 
   const hasTeamup = !!(teamupSettings?.calendarKey);
 
   async function syncTeamUp() {
-    if (!hasTeamup) {
-      setSyncMsg("⚠ No TeamUp Calendar Key found. Go to Settings → TeamUp to add your credentials.");
-      return;
-    }
-    setSyncing(true);
-    setSyncMsg("");
+    if (!hasTeamup) { setSyncMsg("⚠ No TeamUp Calendar Key found. Go to Settings → TeamUp to add your credentials."); return; }
+    setSyncing(true); setSyncMsg("");
     try {
       const res = await fetch("/api/teamup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          calendarKey: teamupSettings.calendarKey,
-          apiKey: teamupSettings.apiKey || "",
-          startDate: dateFrom,
-          endDate: dateTo,
-          subcalendarIds: teamupSettings.subcalendarId
-            ? [teamupSettings.subcalendarId]
-            : [],
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ calendarKey: teamupSettings.calendarKey, apiKey: teamupSettings.apiKey || "", startDate: dateFrom, endDate: dateTo, subcalendarIds: teamupSettings.subcalendarId ? [teamupSettings.subcalendarId] : [] }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "TeamUp sync failed");
-
       const events = data.events || [];
       setTeamupEvents(events);
-
-      // Save pulled events to Supabase bookings table so they persist
       let saved = 0;
       for (const ev of events) {
         try {
           const who = ev.who || ev.title || "Unknown";
           const notes = ev.notes || ev.custom?.notes || "";
-          // Extract phone from notes/who field if present
           const phoneMatch = (notes + " " + who).match(/(\+?27\d{9}|0\d{9})/);
           const phone = phoneMatch ? phoneMatch[0] : "";
           const scanMatch = (ev.title || "").match(/\b(obstetric|abdominal|pelv|renal|kub|thyroid|breast|dvt|carotid|scrotal|msk|soft tissue|hernia|aorta|appendix)\b/i);
           const scan = scanMatch ? scanMatch[0] : (ev.title || "Ultrasound");
-
-          await sbFetch("bookings", {
-            method: "POST",
-            headers: { Prefer: "return=minimal,resolution=ignore-duplicates" },
-            body: JSON.stringify({
-              full_name: who,
-              phone,
-              scan_type: scan,
-              preferred_date: (ev.start_dt || ev.start?.dt || "").slice(0, 10),
-              start_time: (ev.start_dt || ev.start?.dt || "").slice(11, 16),
-              end_time: (ev.end_dt || ev.end?.dt || "").slice(11, 16),
-              status: "Booked",
-              source: "teamup",
-              teamup_event_id: String(ev.id),
-              notes: ev.notes || "",
-            }),
-          });
+          await sbFetch("bookings", { method: "POST", headers: { Prefer: "return=minimal,resolution=ignore-duplicates" }, body: JSON.stringify({ full_name: who, phone, scan_type: scan, preferred_date: (ev.start_dt || ev.start?.dt || "").slice(0, 10), start_time: (ev.start_dt || ev.start?.dt || "").slice(11, 16), end_time: (ev.end_dt || ev.end?.dt || "").slice(11, 16), status: "Booked", source: "teamup", teamup_event_id: String(ev.id), notes: ev.notes || "" }) });
           saved++;
-        } catch (_) { /* skip duplicates */ }
+        } catch (_) {}
       }
-
-      // Reload from Supabase to show merged view
       const fresh = await sbFetch("bookings?select=*&order=created_at.desc&limit=200");
       setBookings(fresh);
       setSyncMsg(`✅ Synced ${events.length} TeamUp event(s) — ${saved} new saved to register.`);
-    } catch (e) {
-      setSyncMsg(`⚠ ${e.message}`);
-    } finally {
-      setSyncing(false);
-    }
+    } catch (e) { setSyncMsg(`⚠ ${e.message}`); } finally { setSyncing(false); }
   }
 
-  const allBookings = [
-    ...bookings,
-    // Show any TeamUp events not yet saved (optimistic)
-    ...teamupEvents
-      .filter(ev => !bookings.some(b => b.teamup_event_id === String(ev.id)))
-      .map(ev => ({
-        id: "tu_" + ev.id,
-        full_name: ev.who || ev.title || "Unknown",
-        phone: "",
-        scan_type: ev.title || "Ultrasound",
-        preferred_date: (ev.start_dt || "").slice(0, 10),
-        status: "Booked",
-        source: "teamup",
-        teamup_event_id: String(ev.id),
-      })),
-  ];
-
-  const filtered = view === "all" ? allBookings
-    : view === "teamup" ? allBookings.filter(b => b.source === "teamup")
-    : allBookings.filter(b => b.source !== "teamup");
+  const allBookings = [...bookings, ...teamupEvents.filter(ev => !bookings.some(b => b.teamup_event_id === String(ev.id))).map(ev => ({ id: "tu_" + ev.id, full_name: ev.who || ev.title || "Unknown", phone: "", scan_type: ev.title || "Ultrasound", preferred_date: (ev.start_dt || "").slice(0, 10), status: "Booked", source: "teamup", teamup_event_id: String(ev.id) }))];
+  const filtered = view === "all" ? allBookings : view === "teamup" ? allBookings.filter(b => b.source === "teamup") : allBookings.filter(b => b.source !== "teamup");
 
   return (
     <div className="page">
       <div className="page-header">
         <h2>Bookings</h2>
         <span className="badge">{filtered.length} total</span>
-        {teamupEvents.length > 0 && (
-          <span className="badge" style={{ background: "#e8f5e9", color: "#2e7d32" }}>
-            📅 {teamupEvents.length} from TeamUp
-          </span>
-        )}
+        {teamupEvents.length > 0 && <span className="badge" style={{ background: "#e8f5e9", color: "#2e7d32" }}>📅 {teamupEvents.length} from TeamUp</span>}
       </div>
-
-      {/* TeamUp sync panel */}
       <div className="teamup-sync-panel">
         <div className="teamup-sync-header">
           <span className="teamup-logo">📅 TeamUp Calendar Sync</span>
-          {hasTeamup
-            ? <span className="teamup-status connected">● API Configured</span>
-            : <span className="teamup-status waiting">● Awaiting API Key — go to Settings to add when received</span>
-          }
+          {hasTeamup ? <span className="teamup-status connected">● API Configured</span> : <span className="teamup-status waiting">● Awaiting API Key — go to Settings to add when received</span>}
         </div>
         <div className="teamup-sync-controls">
           <div className="teamup-date-row">
@@ -446,46 +642,23 @@ function Bookings({ teamupSettings }) {
             <label>To</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="teamup-date-input" />
           </div>
-          <button
-            className={`teamup-sync-btn ${syncing ? "syncing" : ""} ${!hasTeamup ? "disabled" : ""}`}
-            onClick={syncTeamUp}
-            disabled={syncing}
-          >
+          <button className={`teamup-sync-btn ${syncing ? "syncing" : ""} ${!hasTeamup ? "disabled" : ""}`} onClick={syncTeamUp} disabled={syncing}>
             {syncing ? "⟳ Syncing…" : "⟳ Pull from TeamUp"}
           </button>
         </div>
-        {syncMsg && (
-          <p className={`teamup-sync-msg ${syncMsg.startsWith("✅") ? "success" : "warn"}`}>
-            {syncMsg}
-          </p>
-        )}
-        {!hasTeamup && (
-          <p className="teamup-hint">
-            Once you receive your TeamUp API key by email, go to <strong>Settings → TeamUp Integration</strong> and paste in your API key and Calendar Key. Then come back here and click Pull from TeamUp.
-          </p>
-        )}
+        {syncMsg && <p className={`teamup-sync-msg ${syncMsg.startsWith("✅") ? "success" : "warn"}`}>{syncMsg}</p>}
+        {!hasTeamup && <p className="teamup-hint">Once you receive your TeamUp API key by email, go to <strong>Settings → TeamUp Integration</strong> and paste in your API key and Calendar Key.</p>}
       </div>
-
-      {/* View filter */}
       <div className="filter-row">
         {[["all", "All Bookings"], ["teamup", "📅 TeamUp"], ["online", "🌐 Online/Other"]].map(([v, label]) => (
-          <button key={v} className={`filter-btn ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
-            {label}
-          </button>
+          <button key={v} className={`filter-btn ${view === v ? "active" : ""}`} onClick={() => setView(v)}>{label}</button>
         ))}
       </div>
-
       {loading && <p className="loading">Loading…</p>}
       {err && <p className="error">⚠ {err}</p>}
-
       <div className="table-wrap">
         <table>
-          <thead>
-            <tr>
-              <th>Patient</th><th>Phone</th><th>Scan</th>
-              <th>Date</th><th>Time</th><th>Source</th><th>Status</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Patient</th><th>Phone</th><th>Scan</th><th>Date</th><th>Time</th><th>Source</th><th>Status</th></tr></thead>
           <tbody>
             {filtered.map(b => (
               <tr key={b.id}>
@@ -494,24 +667,12 @@ function Bookings({ teamupSettings }) {
                 <td>{b.scan_type || b.scan || "—"}</td>
                 <td>{b.preferred_date || b.date || "—"}</td>
                 <td>{b.start_time || "—"}</td>
-                <td>
-                  <span className={`source-badge ${b.source === "teamup" ? "teamup" : "online"}`}>
-                    {b.source === "teamup" ? "📅 TeamUp" : b.source || "Online"}
-                  </span>
-                </td>
-                <td>
-                  <span className={`status status-${(b.status || "pending").toLowerCase()}`}>
-                    {b.status || "Pending"}
-                  </span>
-                </td>
+                <td><span className={`source-badge ${b.source === "teamup" ? "teamup" : "online"}`}>{b.source === "teamup" ? "📅 TeamUp" : b.source || "Online"}</span></td>
+                <td><span className={`status status-${(b.status || "pending").toLowerCase()}`}>{b.status || "Pending"}</span></td>
               </tr>
             ))}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan={7} className="empty">
-                {view === "teamup" && !hasTeamup
-                  ? "Add your TeamUp API key in Settings to pull calendar bookings."
-                  : "No bookings found"}
-              </td></tr>
+              <tr><td colSpan={7} className="empty">{view === "teamup" && !hasTeamup ? "Add your TeamUp API key in Settings to pull calendar bookings." : "No bookings found"}</td></tr>
             )}
           </tbody>
         </table>
@@ -520,136 +681,7 @@ function Bookings({ teamupSettings }) {
   );
 }
 
-// ── SETTINGS ──────────────────────────────────────────────────────────────────
-function Settings({ teamupSettings, onSave }) {
-  const [apiKey, setApiKey] = React.useState(teamupSettings?.apiKey || "");
-  const [calendarKey, setCalendarKey] = React.useState(teamupSettings?.calendarKey || "");
-  const [subcalendarId, setSubcalendarId] = React.useState(teamupSettings?.subcalendarId || "");
-  const [saved, setSaved] = React.useState(false);
-  const [testing, setTesting] = React.useState(false);
-  const [testMsg, setTestMsg] = React.useState("");
-
-  function handleSave(e) {
-    e.preventDefault();
-    onSave({ apiKey: apiKey.trim(), calendarKey: calendarKey.trim(), subcalendarId: subcalendarId.trim() });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  }
-
-  async function testConnection() {
-    if (!calendarKey.trim()) { setTestMsg("⚠ Enter a Calendar Key first."); return; }
-    setTesting(true); setTestMsg("");
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const next7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-      const res = await fetch("/api/teamup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          calendarKey: calendarKey.trim(),
-          apiKey: apiKey.trim(),
-          startDate: today,
-          endDate: next7,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      const count = (data.events || []).length;
-      setTestMsg(`✅ Connected! Found ${count} event(s) in the next 7 days.`);
-    } catch (e) {
-      setTestMsg(`⚠ ${e.message}`);
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Settings</h2>
-      </div>
-
-      <div className="settings-card">
-        <div className="settings-section-title">📅 TeamUp Calendar Integration</div>
-        <p className="settings-desc">
-          Once you receive your TeamUp API access by email, paste your credentials below.
-          The Calendar Key is the long code in your TeamUp calendar URL (e.g. <code>ks8ab12cd34ef5</code>).
-        </p>
-
-        <form onSubmit={handleSave}>
-          <div className="pw-field">
-            <label>TeamUp API Key</label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-              placeholder="Paste your API key here when received by email"
-              autoComplete="off"
-            />
-            <span className="settings-hint">Received via email from TeamUp after your API request is approved.</span>
-          </div>
-          <div className="pw-field">
-            <label>Calendar Key</label>
-            <input
-              type="text"
-              value={calendarKey}
-              onChange={e => setCalendarKey(e.target.value)}
-              placeholder="e.g. ks8ab12cd34ef5gh67"
-              autoComplete="off"
-            />
-            <span className="settings-hint">Found in your TeamUp calendar URL: teamup.com/<strong>[this-part]</strong></span>
-          </div>
-          <div className="pw-field">
-            <label>Subcalendar ID (optional)</label>
-            <input
-              type="text"
-              value={subcalendarId}
-              onChange={e => setSubcalendarId(e.target.value)}
-              placeholder="Leave blank to pull all sub-calendars"
-              autoComplete="off"
-            />
-            <span className="settings-hint">Only needed if you want to filter by a specific room or branch.</span>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
-            <button type="submit" className="pw-btn" style={{ flex: 1, minWidth: 140 }}>
-              {saved ? "✅ Saved!" : "Save Settings"}
-            </button>
-            <button
-              type="button"
-              className="pw-btn"
-              style={{ flex: 1, minWidth: 140, background: "#1565c0" }}
-              onClick={testConnection}
-              disabled={testing}
-            >
-              {testing ? "Testing…" : "🔌 Test Connection"}
-            </button>
-          </div>
-          {testMsg && (
-            <p className={`pw-${testMsg.startsWith("✅") ? "success" : "error"}`} style={{ marginTop: 10 }}>
-              {testMsg}
-            </p>
-          )}
-        </form>
-
-        <div className="pw-note" style={{ marginTop: 20 }}>
-          <strong>How it works:</strong> Once configured, go to <strong>Bookings → Pull from TeamUp</strong> to fetch
-          appointments from your TeamUp calendar. Events are matched by name and saved into the Bookings register automatically.
-          You can set a date range and filter by source (TeamUp vs online bookings).
-        </div>
-      </div>
-
-      <div className="settings-card" style={{ marginTop: 20 }}>
-        <div className="settings-section-title">ℹ️ Practice Info</div>
-        <p className="settings-desc">Hendors Diagnostics · Hendor L. Wynne · HPCSA DR 0092673</p>
-        <p className="settings-desc">69 Meade Street, George Central, George 6529</p>
-        <p className="settings-desc">072 763 6282 · 081 488 2066</p>
-      </div>
-    </div>
-  );
-}
-
-// ── BILLING ───────────────────────────────────────────────────────────────────
+// ── BILLING PAGE ──────────────────────────────────────────────────────────────
 function Billing() {
   const [items, setItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -658,9 +690,7 @@ function Billing() {
 
   React.useEffect(() => {
     sbFetch("hd_billing_queue?select=*&order=created_at.desc&limit=300")
-      .then(setItems)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .then(setItems).catch(e => setErr(e.message)).finally(() => setLoading(false));
   }, []);
 
   const filtered = filter === "all" ? items : items.filter(i => (i.status || "").toLowerCase() === filter);
@@ -689,28 +719,86 @@ function Billing() {
       {err && <p className="error">⚠ {err}</p>}
       <div className="table-wrap">
         <table>
-          <thead>
-            <tr>
-              <th>Invoice</th><th>Patient</th><th>Exam</th>
-              <th>Due</th><th>Paid</th><th>Status</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Patient</th><th>Examination</th><th>Code</th><th>Type</th><th>Due</th><th>Paid</th><th>Status</th></tr></thead>
           <tbody>
             {filtered.map(b => (
               <tr key={b.id}>
-                <td className="mono">{b.invoice_no || "—"}</td>
                 <td><strong>{b.patient_name}</strong></td>
                 <td>{b.exam_name || b.study_type || "—"}</td>
+                <td className="mono">{b.exam_code || "—"}</td>
+                <td><span className={`source-badge ${b.payment_type === "aid" ? "teamup" : "online"}`}>{b.payment_type === "aid" ? "🏥 Med Aid" : "💵 Cash"}</span></td>
                 <td>R {parseFloat(b.amount_due||0).toLocaleString()}</td>
                 <td>R {parseFloat(b.amount_paid||0).toLocaleString()}</td>
                 <td><span className={`status status-${(b.status||"pending").toLowerCase()}`}>{b.status || "Pending"}</span></td>
               </tr>
             ))}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="empty">No billing records</td></tr>
-            )}
+            {!loading && filtered.length === 0 && <tr><td colSpan={7} className="empty">No billing records</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+function Settings({ teamupSettings, onSave }) {
+  const [apiKey, setApiKey] = React.useState(teamupSettings?.apiKey || "");
+  const [calendarKey, setCalendarKey] = React.useState(teamupSettings?.calendarKey || "");
+  const [subcalendarId, setSubcalendarId] = React.useState(teamupSettings?.subcalendarId || "");
+  const [saved, setSaved] = React.useState(false);
+  const [testing, setTesting] = React.useState(false);
+  const [testMsg, setTestMsg] = React.useState("");
+
+  function handleSave(e) {
+    e.preventDefault();
+    onSave({ apiKey: apiKey.trim(), calendarKey: calendarKey.trim(), subcalendarId: subcalendarId.trim() });
+    setSaved(true); setTimeout(() => setSaved(false), 3000);
+  }
+
+  async function testConnection() {
+    if (!calendarKey.trim()) { setTestMsg("⚠ Enter a Calendar Key first."); return; }
+    setTesting(true); setTestMsg("");
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const next7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const res = await fetch("/api/teamup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ calendarKey: calendarKey.trim(), apiKey: apiKey.trim(), startDate: today, endDate: next7 }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setTestMsg(`✅ Connected! Found ${(data.events || []).length} event(s) in the next 7 days.`);
+    } catch (e) { setTestMsg(`⚠ ${e.message}`); } finally { setTesting(false); }
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header"><h2>Settings</h2></div>
+      <div className="settings-card">
+        <div className="settings-section-title">📅 TeamUp Calendar Integration</div>
+        <p className="settings-desc">Once you receive your TeamUp API access by email, paste your credentials below.</p>
+        <form onSubmit={handleSave}>
+          <div className="pw-field">
+            <label>TeamUp API Key</label>
+            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Paste your API key here when received by email" autoComplete="off" />
+          </div>
+          <div className="pw-field">
+            <label>Calendar Key</label>
+            <input type="text" value={calendarKey} onChange={e => setCalendarKey(e.target.value)} placeholder="e.g. ks8ab12cd34ef5gh67" autoComplete="off" />
+          </div>
+          <div className="pw-field">
+            <label>Subcalendar ID (optional)</label>
+            <input type="text" value={subcalendarId} onChange={e => setSubcalendarId(e.target.value)} placeholder="Leave blank to pull all sub-calendars" autoComplete="off" />
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+            <button type="submit" className="pw-btn" style={{ flex: 1, minWidth: 140 }}>{saved ? "✅ Saved!" : "Save Settings"}</button>
+            <button type="button" className="pw-btn" style={{ flex: 1, minWidth: 140, background: "#1565c0" }} onClick={testConnection} disabled={testing}>{testing ? "Testing…" : "🔌 Test Connection"}</button>
+          </div>
+          {testMsg && <p className={`pw-${testMsg.startsWith("✅") ? "success" : "error"}`} style={{ marginTop: 10 }}>{testMsg}</p>}
+        </form>
+      </div>
+      <div className="settings-card" style={{ marginTop: 20 }}>
+        <div className="settings-section-title">ℹ️ Practice Info</div>
+        <p className="settings-desc">Hendors Diagnostics · Hendor L. Wynne · HPCSA DR 0092673</p>
+        <p className="settings-desc">69 Meade Street, George Central, George 6529</p>
+        <p className="settings-desc">072 763 6282 · 081 488 2066</p>
       </div>
     </div>
   );
@@ -726,15 +814,10 @@ function Reports({ user }) {
 
   React.useEffect(() => {
     sbFetch("reports?select=*&order=created_at.desc&limit=200")
-      .then(setReports)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .then(setReports).catch(e => setErr(e.message)).finally(() => setLoading(false));
   }, []);
 
-  const filtered = reports.filter(r =>
-    [r.patient_name, r.study_type, r.referring_doctor]
-      .join(" ").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = reports.filter(r => [r.patient_name, r.study_type, r.referring_doctor].join(" ").toLowerCase().includes(search.toLowerCase()));
 
   function sendWhatsAppPatient(r) {
     const phone = (r.phone || r.patient_phone || "").replace(/\D/g, "").replace(/^0/, "27");
@@ -742,24 +825,20 @@ function Reports({ user }) {
     const msg = encodeURIComponent(`Hendors Diagnostics\n\nDear ${r.patient_name},\n\nYour ultrasound report is ready.\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nPlease contact us to collect or arrange delivery.\n\nHendors Diagnostics\n072 763 6282`);
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
   }
-
   function sendWhatsAppDoctor(r) {
     const msg = encodeURIComponent(`Hendors Diagnostics\n\nDear ${r.referring_doctor||"Doctor"},\n\nReport completed for your patient: ${r.patient_name}\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nPlease contact us if you require a copy.\n\nHendor Wynne\nMedical Sonographer\n072 763 6282`);
     window.open(`https://wa.me/?text=${msg}`, "_blank");
   }
-
   function sendEmailPatient(r) {
     const subject = encodeURIComponent(`Hendors Diagnostics — Ultrasound Report for ${r.patient_name}`);
     const body = encodeURIComponent(`Dear ${r.patient_name},\n\nYour ultrasound report is ready.\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nPlease contact us to collect your report.\n\nHendors Diagnostics\n072 763 6282\nreception.hendors@gmail.com`);
     window.open(`mailto:${r.email||r.patient_email||""}?subject=${subject}&body=${body}`);
   }
-
   function sendEmailDoctor(r) {
     const subject = encodeURIComponent(`Report: ${r.patient_name} — ${r.study_type||r.scan_type||""}`);
     const body = encodeURIComponent(`Dear ${r.referring_doctor||"Doctor"},\n\nReport completed for your patient:\n\nPatient: ${r.patient_name}\nStudy: ${r.study_type||r.scan_type||""}\nDate: ${r.report_date||""}\n\nKind regards,\nHendor Wynne\nMedical Sonographer\nHendors Diagnostics\n072 763 6282`);
     window.open(`mailto:?subject=${subject}&body=${body}`);
   }
-
   async function deleteReport(r) {
     if (!window.confirm(`Delete report for ${r.patient_name}?\n\nThis cannot be undone.`)) return;
     try {
@@ -770,26 +849,13 @@ function Reports({ user }) {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Reports</h2>
-        <span className="badge">{reports.length} reports</span>
-      </div>
-      <input
-        className="search-input"
-        placeholder="Search by patient, study or doctor…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
+      <div className="page-header"><h2>Reports</h2><span className="badge">{reports.length} reports</span></div>
+      <input className="search-input" placeholder="Search by patient, study or doctor…" value={search} onChange={e => setSearch(e.target.value)} />
       {loading && <p className="loading">Loading…</p>}
       {err && <p className="error">⚠ {err}</p>}
       <div className="table-wrap">
         <table>
-          <thead>
-            <tr>
-              <th>Patient</th><th>Study</th><th>Doctor</th>
-              <th>Date</th><th>Status</th><th>Actions</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Patient</th><th>Study</th><th>Doctor</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {filtered.map(r => (
               <tr key={r.id}>
@@ -803,15 +869,11 @@ function Reports({ user }) {
                   <button className="act-btn whatsapp" onClick={() => sendWhatsAppDoctor(r)} title="WhatsApp Doctor">💬D</button>
                   <button className="act-btn email" onClick={() => sendEmailPatient(r)} title="Email Patient">✉️P</button>
                   <button className="act-btn email" onClick={() => sendEmailDoctor(r)} title="Email Doctor">✉️D</button>
-                  {isAdmin && (
-                    <button className="act-btn delete" onClick={() => deleteReport(r)} title="Delete report">🗑️</button>
-                  )}
+                  {isAdmin && <button className="act-btn delete" onClick={() => deleteReport(r)} title="Delete report">🗑️</button>}
                 </td>
               </tr>
             ))}
-            {!loading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="empty">No reports found</td></tr>
-            )}
+            {!loading && filtered.length === 0 && <tr><td colSpan={6} className="empty">No reports found</td></tr>}
           </tbody>
         </table>
       </div>
@@ -829,9 +891,7 @@ function Intake({ onApproveAndOpen, user }) {
 
   React.useEffect(() => {
     sbFetch("pending_intake?select=*&order=created_at.desc&limit=100")
-      .then(setItems)
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .then(setItems).catch(e => setErr(e.message)).finally(() => setLoading(false));
   }, []);
 
   async function approve(item) {
@@ -844,53 +904,29 @@ function Intake({ onApproveAndOpen, user }) {
       if (item.phone)            payload.phone            = item.phone;
       if (item.email)            payload.email            = item.email;
       if (item.referring_doctor) payload.referring_doctor = item.referring_doctor;
-
-      await sbFetch(`patients`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      await sbFetch(`pending_intake?id=eq.${item.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "Approved" }),
-      });
+      await sbFetch(`patients`, { method: "POST", body: JSON.stringify(payload) });
+      await sbFetch(`pending_intake?id=eq.${item.id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) });
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: "Approved" } : i));
-
-      // Auto-navigate to Report Studio with patient pre-filled
-      onApproveAndOpen({
-        patient_name:     item.full_name || "",
-        patient_id:       item.id_number || "",
-        dob:              item.dob || "",
-        age:              item.age || "",
-        gender:           item.sex || "",
-        phone:            item.phone || "",
-        medical_aid:      item.medical_aid || "",
-        referring_doctor: item.referring_doctor || "",
-      });
-    } catch (e) {
-      alert("Error approving: " + e.message);
-    }
+      onApproveAndOpen({ patient_name: item.full_name || "", patient_id: item.id_number || "", dob: item.dob || "", age: item.age || "", gender: item.sex || "", phone: item.phone || "", medical_aid: item.medical_aid || "", referring_doctor: item.referring_doctor || "" });
+    } catch (e) { alert("Error approving: " + e.message); }
   }
 
   async function deleteIntake(item) {
-    if (!window.confirm(`Delete intake record for ${item.full_name}?\n\nThis removes it from the intake list only — it will NOT affect the Patient Register.`)) return;
+    if (!window.confirm(`Delete intake record for ${item.full_name}?`)) return;
     try {
       await sbFetch(`pending_intake?id=eq.${item.id}`, { method: "DELETE" });
       setItems(prev => prev.filter(i => i.id !== item.id));
-    } catch (e) {
-      alert("Error deleting: " + e.message);
-    }
+    } catch (e) { alert("Error deleting: " + e.message); }
   }
 
   async function clearAllApproved() {
     const approved = items.filter(i => i.status === "Approved");
     if (approved.length === 0) return;
-    if (!window.confirm(`Remove all ${approved.length} approved record(s) from this list?\n\nThey are already saved in the Patient Register — this just cleans up the intake list.`)) return;
+    if (!window.confirm(`Remove all ${approved.length} approved record(s)?`)) return;
     try {
       await sbFetch(`pending_intake?status=eq.Approved`, { method: "DELETE" });
       setItems(prev => prev.filter(i => i.status !== "Approved"));
-    } catch (e) {
-      alert("Error clearing: " + e.message);
-    }
+    } catch (e) { alert("Error clearing: " + e.message); }
   }
 
   const pending = items.filter(i => i.status !== "Approved");
@@ -902,43 +938,20 @@ function Intake({ onApproveAndOpen, user }) {
       <div className="page-header">
         <h2>Patient Intake</h2>
         <span className="badge orange">{pending.length} pending</span>
-        {approved.length > 0 && (
-          <span className="badge" style={{ background: "#e8f5e9", color: "#2e7d32" }}>
-            {approved.length} approved
-          </span>
-        )}
+        {approved.length > 0 && <span className="badge" style={{ background: "#e8f5e9", color: "#2e7d32" }}>{approved.length} approved</span>}
       </div>
-
-      {/* Toolbar */}
       <div className="intake-toolbar">
-        <button
-          className={`filter-btn ${showApproved ? "active" : ""}`}
-          onClick={() => setShowApproved(v => !v)}
-        >
-          {showApproved ? "Hide Approved" : "Show Approved"}
-        </button>
-        {isAdmin && approved.length > 0 && (
-          <button className="filter-btn" onClick={clearAllApproved} style={{ color: "#be123c", borderColor: "#fda4af" }}>
-            🗑️ Clear All Approved
-          </button>
-        )}
+        <button className={`filter-btn ${showApproved ? "active" : ""}`} onClick={() => setShowApproved(v => !v)}>{showApproved ? "Hide Approved" : "Show Approved"}</button>
+        {isAdmin && approved.length > 0 && <button className="filter-btn" onClick={clearAllApproved} style={{ color: "#be123c", borderColor: "#fda4af" }}>🗑️ Clear All Approved</button>}
       </div>
-
       {loading && <p className="loading">Loading…</p>}
       {err && <p className="error">⚠ {err}</p>}
-
       <div className="intake-grid">
         {displayed.map(item => (
           <div key={item.id} className={`intake-card ${item.status === "Approved" ? "approved" : ""}`}>
             <div className="intake-card-header">
               <div className="intake-name">{item.full_name}</div>
-              {isAdmin && (
-                <button
-                  className="intake-delete-btn"
-                  onClick={() => deleteIntake(item)}
-                  title="Delete this intake record"
-                >🗑️</button>
-              )}
+              {isAdmin && <button className="intake-delete-btn" onClick={() => deleteIntake(item)} title="Delete">🗑️</button>}
             </div>
             <div className="intake-details">
               <span>📱 {item.phone || "—"}</span>
@@ -953,13 +966,7 @@ function Intake({ onApproveAndOpen, user }) {
             }
           </div>
         ))}
-        {!loading && displayed.length === 0 && (
-          <p className="empty">
-            {pending.length === 0 && !showApproved
-              ? "All caught up! No pending intake submissions."
-              : "No intake submissions yet"}
-          </p>
-        )}
+        {!loading && displayed.length === 0 && <p className="empty">{pending.length === 0 && !showApproved ? "All caught up! No pending intake submissions." : "No intake submissions yet"}</p>}
       </div>
     </div>
   );
@@ -974,52 +981,30 @@ function ChangePassword({ user, onPasswordChanged }) {
   const [success, setSuccess] = React.useState(false);
 
   function handleChange(e) {
-    e.preventDefault();
-    setMsg(null);
-    if (current !== STAFF[user.username].password) {
-      setMsg("Current password is incorrect."); return;
-    }
-    if (newPwd.length < 6) {
-      setMsg("New password must be at least 6 characters."); return;
-    }
-    if (newPwd !== confirm) {
-      setMsg("New passwords do not match."); return;
-    }
+    e.preventDefault(); setMsg(null);
+    if (current !== STAFF[user.username].password) { setMsg("Current password is incorrect."); return; }
+    if (newPwd.length < 6) { setMsg("New password must be at least 6 characters."); return; }
+    if (newPwd !== confirm) { setMsg("New passwords do not match."); return; }
     STAFF[user.username].password = newPwd;
     onPasswordChanged(newPwd);
-    setSuccess(true);
-    setCurrent(""); setNewPwd(""); setConfirm("");
+    setSuccess(true); setCurrent(""); setNewPwd(""); setConfirm("");
   }
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Change Password</h2>
-      </div>
+      <div className="page-header"><h2>Change Password</h2></div>
       <div className="pw-card">
         <p className="pw-info">Changing password for: <strong>{user.name}</strong> ({user.username})</p>
         <form onSubmit={handleChange}>
-          <div className="pw-field">
-            <label>Current Password</label>
-            <input type="password" value={current} onChange={e => { setCurrent(e.target.value); setMsg(null); setSuccess(false); }} placeholder="Enter current password" required />
-          </div>
-          <div className="pw-field">
-            <label>New Password</label>
-            <input type="password" value={newPwd} onChange={e => { setNewPwd(e.target.value); setMsg(null); setSuccess(false); }} placeholder="At least 6 characters" required />
-          </div>
-          <div className="pw-field">
-            <label>Confirm New Password</label>
-            <input type="password" value={confirm} onChange={e => { setConfirm(e.target.value); setMsg(null); setSuccess(false); }} placeholder="Repeat new password" required />
-          </div>
+          <div className="pw-field"><label>Current Password</label><input type="password" value={current} onChange={e => { setCurrent(e.target.value); setMsg(null); setSuccess(false); }} placeholder="Enter current password" required /></div>
+          <div className="pw-field"><label>New Password</label><input type="password" value={newPwd} onChange={e => { setNewPwd(e.target.value); setMsg(null); setSuccess(false); }} placeholder="At least 6 characters" required /></div>
+          <div className="pw-field"><label>Confirm New Password</label><input type="password" value={confirm} onChange={e => { setConfirm(e.target.value); setMsg(null); setSuccess(false); }} placeholder="Repeat new password" required /></div>
           {msg && <p className="pw-error">⚠ {msg}</p>}
           {success && <p className="pw-success">✅ Password changed successfully!</p>}
           <button type="submit" className="pw-btn">Update Password</button>
         </form>
-        <div className="pw-note">
-          <strong>Note:</strong> This change applies for the current session only. To make it permanent, update the STAFF passwords in <code>App.jsx</code> on GitHub.
-        </div>
+        <div className="pw-note"><strong>Note:</strong> This change applies for the current session only. To make it permanent, update the STAFF passwords in <code>App.jsx</code> on GitHub.</div>
       </div>
     </div>
   );
 }
-

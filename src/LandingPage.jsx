@@ -271,15 +271,25 @@ export default function LandingPage({ onStaffLogin }) {
           text-decoration: none; padding: 13px 24px; border-radius: 10px;
           font-size: 15px; font-weight: 600; border: none; cursor: pointer;
           transition: background 0.2s, transform 0.1s;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+          user-select: none;
+          -webkit-user-select: none;
+          position: relative;
+          z-index: 1;
         }
         .lp-btn-primary:hover { background: #157a5e; transform: translateY(-1px); }
+        .lp-btn-primary:active { background: #157a5e; transform: scale(0.97); }
         .lp-btn-ghost {
           display: inline-block; background: transparent; color: #1a3a5c;
           text-decoration: none; padding: 13px 24px; border-radius: 10px;
           font-size: 15px; font-weight: 500; border: 2px solid #d0c8bc;
           transition: border-color 0.2s, background 0.2s;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
         .lp-btn-ghost:hover { border-color: #1a8a6c; background: #f0faf7; }
+        .lp-links a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
         .lp-credential { font-size: 12px; color: #8a9aaa; letter-spacing: 0.04em; }
 
         /* ── HERO PHOTO ── */
