@@ -200,7 +200,6 @@ export default function LandingPage({ onStaffLogin }) {
         <div className="lp-footer-inner">
           <div className="lp-footer-brand">
             <img src={LOGO_DATA_URL} alt="Hendors Diagnostics" className="lp-footer-logo" />
-            <span>Hendors Diagnostics</span>
           </div>
           <p className="lp-footer-copy">
             © {new Date().getFullYear()} Hendors Diagnostics · Hendor L. Wynne · HPCSA DR 0092673
@@ -229,9 +228,9 @@ export default function LandingPage({ onStaffLogin }) {
           max-width: 1100px; margin: 0 auto; padding: 0 24px;
           height: 64px; display: flex; align-items: center; justify-content: space-between;
         }
-        .lp-brand { display: flex; align-items: center; gap: 10px; }
-        .lp-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
-        .lp-brand-name { font-weight: 700; font-size: 15px; color: #1a3a5c; letter-spacing: -0.01em; }
+        .lp-brand { display: flex; align-items: center; }
+        .lp-logo { height: 48px; width: auto; max-width: 220px; object-fit: contain; display: block; }
+        .lp-brand-name { display: none; }
         .lp-links { display: flex; gap: 28px; }
         .lp-links a { text-decoration: none; color: #5a6a7a; font-size: 14px; font-weight: 500; transition: color 0.15s; }
         .lp-links a:hover { color: #1a8a6c; }
@@ -404,7 +403,7 @@ export default function LandingPage({ onStaffLogin }) {
           display: flex; align-items: center; gap: 8px;
           color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 600;
         }
-        .lp-footer-logo { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; opacity: 0.7; }
+        .lp-footer-logo { height: 32px; width: auto; max-width: 160px; object-fit: contain; opacity: 0.8; }
         .lp-footer-copy { font-size: 11px; color: rgba(255,255,255,0.3); }
         .lp-staff-link {
           background: none; border: none; color: rgba(255,255,255,0.15);
