@@ -237,7 +237,6 @@ export default function LandingPage({ onStaffLogin }) {
 
         /* ── HERO ── */
         .lp-hero {
-          min-height: 90vh;
           display: grid;
           grid-template-columns: 1fr 420px;
           align-items: center;
@@ -245,6 +244,8 @@ export default function LandingPage({ onStaffLogin }) {
           max-width: 1100px;
           margin: 0 auto;
           padding: 80px 24px;
+          position: relative;
+          z-index: 0;
         }
         @media(max-width: 800px) {
           .lp-hero { grid-template-columns: 1fr; padding: 48px 24px; }
@@ -324,7 +325,7 @@ export default function LandingPage({ onStaffLogin }) {
         .lp-sep { opacity: 0.3; }
 
         /* ── ABOUT ── */
-        .lp-about { padding: 96px 24px; background: #fff; }
+        .lp-about { padding: 96px 24px; background: #fff; position: relative; z-index: 1; }
         .lp-section-inner { max-width: 1100px; margin: 0 auto; }
         .lp-section-eyebrow {
           font-size: 12px; font-weight: 700; letter-spacing: 0.14em;
@@ -354,7 +355,7 @@ export default function LandingPage({ onStaffLogin }) {
         .lp-value-card p { font-size: 14px; color: #6a7a8a; line-height: 1.6; }
 
         /* ── SERVICES ── */
-        .lp-services { padding: 96px 24px; background: #faf9f7; }
+        .lp-services { padding: 96px 24px; background: #faf9f7; position: relative; z-index: 1; }
         .lp-scan-grid {
           display: grid; grid-template-columns: repeat(auto-fill, minmax(270px,1fr));
           gap: 18px; margin-bottom: 40px;
@@ -363,6 +364,7 @@ export default function LandingPage({ onStaffLogin }) {
           background: #fff; border: 1px solid #e8e0d5;
           border-radius: 14px; padding: 24px;
           transition: box-shadow 0.2s, transform 0.15s;
+          position: relative; z-index: 1;
         }
         .lp-scan-card:hover { box-shadow: 0 6px 24px rgba(26,58,92,0.09); transform: translateY(-2px); }
         .lp-scan-icon { font-size: 24px; display: block; margin-bottom: 12px; }
@@ -371,12 +373,13 @@ export default function LandingPage({ onStaffLogin }) {
         .lp-services-cta { text-align: center; }
 
         /* ── CONTACT ── */
-        .lp-contact { padding: 96px 24px; background: #fff; }
+        .lp-contact { padding: 96px 24px; background: #fff; position: relative; z-index: 1; }
         .lp-contact-grid {
           display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 18px;
         }
         .lp-contact-card {
           background: #faf9f7; border: 1px solid #e8e0d5; border-radius: 14px; padding: 24px;
+          position: relative; z-index: 1;
         }
         .lp-contact-card--wa { background: #f0faf6; border-color: #a8d8c8; }
         .lp-contact-icon { font-size: 22px; display: block; margin-bottom: 12px; }
@@ -385,7 +388,7 @@ export default function LandingPage({ onStaffLogin }) {
           letter-spacing: 0.1em; color: #8a9aaa; margin-bottom: 10px;
         }
         .lp-contact-card p { font-size: 14px; color: #2c2c2c; line-height: 1.7; }
-        .lp-contact-card a { color: #1a8a6c; text-decoration: none; }
+        .lp-contact-card a { color: #1a8a6c; text-decoration: none; pointer-events: auto; position: relative; z-index: 2; }
         .lp-contact-card a:hover { text-decoration: underline; }
         .lp-btn-sm { padding: 10px 18px; font-size: 14px; }
 
