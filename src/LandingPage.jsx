@@ -44,21 +44,51 @@ export default function LandingPage({ onStaffLogin }) {
       setError("Please complete your name, phone number, scan type and preferred date."); return;
     }
     setSending(true);
+    setError("");
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
+      const bookingRef = `WEB-${Date.now().toString(36).toUpperCase()}`;
+      const requestedTime = form.preferred_time || "Any available time";
+
+      // Website submissions are booking REQUESTS, not confirmed appointments.
+      // start_time stays NULL so a confirmed appointment cannot block the request.
+      const payload = {
+        patient_name: form.full_name.trim(),
+        patient_phone: form.phone.trim(),
+        appointment_date: form.preferred_date,
+        start_time: null,
+        study_type: form.scan_type,
+        status: "Online Request",
+        location: "George",
+        doctor: form.referring_doctor.trim() || null,
+        notes: [
+          `Booking reference: ${bookingRef}`,
+          `Requested time: ${requestedTime}`,
+          form.email.trim() ? `Email: ${form.email.trim()}` : "",
+          `Payment: ${form.payment_type}`,
+          form.notes.trim()
+        ].filter(Boolean).join("\n")
+      };
+
+      const res = await fetch(`${SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/appointments`, {
         method: "POST",
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-        body: JSON.stringify({
-          full_name: form.full_name.trim(), phone: form.phone.trim(), email: form.email.trim() || null,
-          scan_type: form.scan_type, preferred_date: form.preferred_date, start_time: form.preferred_time || null,
-          status: "Pending", source: "website",
-          notes: [form.referring_doctor ? `Referring doctor: ${form.referring_doctor}` : "", `Payment: ${form.payment_type}`, form.notes].filter(Boolean).join("\n")
-        })
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal"
+        },
+        body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error(await res.text());
+
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(`HTTP ${res.status}: ${detail || res.statusText}`);
+      }
       setSuccess(true);
     } catch (err) {
-      console.error(err); setError("The request could not be submitted. Please WhatsApp 072 763 6282.");
+      console.error("HD ONE booking submission failed", err);
+      const detail = String(err?.message || err || "Unknown error");
+      setError(`The request could not be submitted. ${detail.slice(0, 260)}`);
     } finally { setSending(false); }
   }
 
@@ -138,3 +168,4 @@ export default function LandingPage({ onStaffLogin }) {
     `}</style>
   </div>;
 }
+
