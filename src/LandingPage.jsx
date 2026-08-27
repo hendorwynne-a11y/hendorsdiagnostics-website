@@ -1,5 +1,8 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { LOGO_DATA_URL } from "./brandAssets.js";
+
+const PATIENT_BOOKING_URL = "https://hd1-booking-portals.hendors.chatgpt.site/patient";
+const STAFF_PORTAL_URL = "https://hd1-booking-portals.hendors.chatgpt.site/staff";
 
 const SUPABASE_URL = "https://acqahzuiozxfuqyqmgqr.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjcWFoenVpb3p4ZnVxeXFtZ3FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTY5MjYsImV4cCI6MjA5MzQ5MjkyNn0.8BMl5bjtI0o23eAG5j5p53Pun_h1s8cecY6xiTVs6aE";
@@ -23,7 +26,7 @@ const SCANS = [
 
 function go(id) { document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); }
 
-export default function LandingPage({ onStaffLogin }) {
+export default function LandingPage() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -36,7 +39,8 @@ export default function LandingPage({ onStaffLogin }) {
   });
 
   const set = (name, value) => { setForm(p => ({ ...p, [name]: value })); setError(""); };
-  const openBooking = () => { setSuccess(false); setError(""); setBookingOpen(true); setMenuOpen(false); };
+  const openBooking = () => { window.location.assign(PATIENT_BOOKING_URL); };
+  const openStaffPortal = () => { window.location.assign(STAFF_PORTAL_URL); };
 
   async function submit(e) {
     e.preventDefault();
@@ -100,7 +104,7 @@ export default function LandingPage({ onStaffLogin }) {
         <button onClick={() => go("journey")}>Your journey</button>
         <button onClick={() => go("about")}>About</button>
         <button onClick={() => go("contact")}>Contact</button>
-        <button onClick={onStaffLogin}>Staff portal</button>
+        <button onClick={openStaffPortal}>Staff portal</button>
       </nav>
       <div className="actions"><button className="book" onClick={openBooking}>Book a scan</button><button className="hamb" onClick={() => setMenuOpen(v => !v)}>☰</button></div>
     </header>
@@ -148,7 +152,7 @@ export default function LandingPage({ onStaffLogin }) {
       <section className="cta"><div><small>READY TO BOOK?</small><h2>Your diagnostic journey can start right here.</h2><p>Submit your appointment request online and our team will confirm the date, time and preparation requirements.</p></div><button onClick={openBooking}>Request your appointment →</button></section>
     </main>
 
-    <footer id="contact"><div><img src={LOGO_DATA_URL} alt="Hendors Diagnostics"/><p>Precision ultrasound, personal care and connected digital reporting.</p></div><div><h4>Contact</h4><a href="tel:+27727636282">072 763 6282</a><a href="tel:+27814882066">081 488 2066</a><a href="mailto:reception.hendors@gmail.com">reception.hendors@gmail.com</a></div><div><h4>Visit us</h4><p>69 Meade Street<br/>George Central<br/>George, 6529</p></div><div><h4>Quick access</h4><button onClick={openBooking}>Book a scan</button><button onClick={onStaffLogin}>Staff portal</button></div><div className="footbottom">© {new Date().getFullYear()} Hendors Diagnostics · HPCSA DR 0092673</div></footer>
+    <footer id="contact"><div><img src={LOGO_DATA_URL} alt="Hendors Diagnostics"/><p>Precision ultrasound, personal care and connected digital reporting.</p></div><div><h4>Contact</h4><a href="tel:+27727636282">072 763 6282</a><a href="tel:+27814882066">081 488 2066</a><a href="mailto:reception.hendors@gmail.com">reception.hendors@gmail.com</a></div><div><h4>Visit us</h4><p>69 Meade Street<br/>George Central<br/>George, 6529</p></div><div><h4>Quick access</h4><button onClick={openBooking}>Book a scan</button><button onClick={openStaffPortal}>Staff portal</button></div><div className="footbottom">© {new Date().getFullYear()} Hendors Diagnostics · HPCSA DR 0092673</div></footer>
 
     {bookingOpen && <div className="backdrop" onMouseDown={e => e.target===e.currentTarget && setBookingOpen(false)}><div className="modal"><button className="close" onClick={()=>setBookingOpen(false)}>×</button>{!success?<><small>ONLINE BOOKING REQUEST</small><h2>Let’s arrange your ultrasound.</h2><p>Complete the form below. Reception will confirm the final appointment time.</p><form onSubmit={submit}>
       <label>Full name *<input value={form.full_name} onChange={e=>set("full_name",e.target.value)} /></label>
