@@ -67,6 +67,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .required-note{font-size:11px;color:#8a99aa;margin-top:4px}
 
 @media(max-width:400px){.row2{grid-template-columns:1fr}}
+button[type=button]{min-height:44px;padding:10px 14px;margin:4px;border:1px solid var(--blue);border-radius:8px;background:white;color:var(--blue);font-weight:700;cursor:pointer}input[type=checkbox]{appearance:auto;-webkit-appearance:checkbox}
 </style>
 </head>
 <body>
@@ -170,6 +171,13 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <input id="referring_doctor" placeholder="Dr. name and practice">
     </div>
 
+<section aria-labelledby="request-heading"><h2 id="request-heading" class="section-title">Doctor's paper request</h2>
+<p>Photograph each page clearly, including the doctor's name and examination requested. Up to 3 pages.</p>
+<button type="button" onclick="document.getElementById('request-camera').click()">Use phone camera</button>
+<button type="button" onclick="document.getElementById('request-files').click()">Choose photos</button>
+<input hidden id="request-camera" type="file" accept="image/*" capture="environment">
+<input hidden id="request-files" type="file" accept="image/*" multiple>
+<p id="request-status" role="status" aria-live="polite"></p><div id="request-preview"></div></section>
     <div class="section-title">Consent</div>
     <div class="field">
       <div class="consent-box">
@@ -225,8 +233,32 @@ function showStatus(ok, icon, title, msg) {
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+let doctorRequestPages=[], requestBusy=false;
+function renderRequestPages(){
+ const box=document.getElementById('request-preview');box.replaceChildren();
+ doctorRequestPages.forEach((src,i)=>{const wrap=document.createElement('div'),img=document.createElement('img'),btn=document.createElement('button');img.src=src;img.alt="Doctor's request page "+(i+1);img.style.cssText='max-width:100%;max-height:360px;display:block;margin:10px 0';btn.type='button';btn.textContent='Remove page '+(i+1);btn.onclick=()=>{doctorRequestPages.splice(i,1);renderRequestPages()};wrap.append(img,btn);box.append(wrap)});
+}
+async function addRequestPages(event){
+ if(requestBusy)return;
+ const files=Array.from(event.target.files||[]);event.target.value='';if(!files.length)return;
+ const status=document.getElementById('request-status');
+ if(files.length+doctorRequestPages.length>3){status.textContent='You can attach up to 3 pages. Remove a page first.';return}
+ requestBusy=true;document.getElementById('submitBtn').disabled=true;status.textContent='Preparing photo…';
+ try{const added=[];for(const file of files){
+ if(!file.type.startsWith('image/')||file.size>20*1024*1024)throw Error('Choose a photo smaller than 20 MB.');
+ const url=URL.createObjectURL(file);try{const img=new Image();img.src=url;await img.decode();
+ const scale=Math.min(1,1800/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const data=canvas.toDataURL('image/jpeg',0.82);if(data.length>2000000)throw Error('Photo is too large. Please take a closer photo of the page.');added.push(data);
+ }finally{URL.revokeObjectURL(url)}}doctorRequestPages.push(...added);renderRequestPages();status.textContent='Check that every page is readable before submitting.';
+ }catch(e){status.textContent=e.message||'Could not read this photo. Please choose a JPEG or PNG photo.'}
+ finally{requestBusy=false;document.getElementById('submitBtn').disabled=false}
+}
+document.getElementById('request-camera').addEventListener('change',addRequestPages);
+document.getElementById('request-files').addEventListener('change',addRequestPages);
+
+
 document.getElementById('intakeForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if(requestBusy)return;
 
   const btn = document.getElementById('submitBtn');
   const spinner = document.getElementById('spinner');
@@ -238,6 +270,8 @@ document.getElementById('intakeForm').addEventListener('submit', async (e) => {
 
   const row = {};
   FIELDS.forEach(id => { row[id] = (document.getElementById(id)?.value || '').trim(); });
+  row.doctor_request_pages=doctorRequestPages.slice();
+  if(!row.dob)row.dob=null;
   row.consent = document.getElementById('consent').checked ? 'Yes' : 'No';
   row.status = 'Pending';
   row.source = 'web';
@@ -247,7 +281,7 @@ document.getElementById('intakeForm').addEventListener('submit', async (e) => {
     const { error } = await client.from('pending_intake').insert(row);
     if (error) throw error;
 
-    e.target.reset();
+    e.target.reset();doctorRequestPages=[];renderRequestPages();document.getElementById('request-status').textContent='';
     document.getElementById('progressFill').style.width = '0%';
     showStatus(true, '✅', 'Registration submitted!',
       'Thank you ' + (row.full_name || '') + '. Reception will review your details and add you to the clinic register. Please arrive a few minutes early on the day of your appointment.');
