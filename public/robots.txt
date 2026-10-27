@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /hd-one.html
+Disallow: /patient-intake.html
+Sitemap: https://hendorsdiagnostics-website.vercel.app/sitemap.xml
