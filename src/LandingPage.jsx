@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LOGO_DATA_URL } from "./brandAssets.js";
 
 const PATIENT_BOOKING_URL = "https://hd1-booking-portals.hendors.chatgpt.site/patient";
@@ -29,6 +29,7 @@ const DIRECTIONS_URL = "https://www.google.com/maps/dir/?api=1&destination=69+Me
 function go(id) { document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }); }
 
 export default function LandingPage() {
+  useEffect(() => { const section=window.location.hash.slice(1); if(section) document.getElementById(section)?.scrollIntoView({block:"start"}); }, []);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sending, setSending] = useState(false);
